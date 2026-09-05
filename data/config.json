@@ -1,0 +1,18 @@
+﻿{
+  "ram": 2,
+  "maxSystemRam": 4,
+  "selectedVersion": "1.20.4",
+  "selectedAccountId": null,
+  "accounts": [],
+  "windowWidth": 1280,
+  "windowHeight": 720,
+  "fullScreen": false,
+  "gameDir": "",
+  "javaPath": "",
+  "jvmArgs": "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC",
+  "glassOpacity": 78,
+  "accentColor": "#00f0ff",
+  "themePreset": "cyan",
+  "bgImage": "",
+  "bgImageOpacity": 45
+}

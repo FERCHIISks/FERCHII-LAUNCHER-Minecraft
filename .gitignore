@@ -1,0 +1,18 @@
+﻿# Runtime de Java descargado automaticamente por el launcher
+data/runtime/
+data/runtime/*
+
+# Archivos de juego descargados localmente
+data/game/
+data/game/*
+
+# Archivos temporales y de registro
+*.log
+*.tmp
+node_modules/
+.vscode/
+.idea/
+
+# Datos temporales de WebView2
+FerchiiLauncherData/
+EBWebView/
