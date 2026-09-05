@@ -1,4 +1,4 @@
-﻿{
+{
   "ram": 2,
   "maxSystemRam": 4,
   "selectedVersion": "1.20.4",
@@ -7,6 +7,7 @@
   "windowWidth": 1280,
   "windowHeight": 720,
   "fullScreen": false,
+  "closeOnLaunch": true,
   "gameDir": "",
   "javaPath": "",
   "jvmArgs": "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC",

@@ -7,7 +7,17 @@ const { loadConfig, saveConfig, getTotalSystemRAMGB } = require('./config');
 const { createOfflineAccount, startMicrosoftDeviceCode, pollMicrosoftToken } = require('./auth');
 const { getVersionManifest, getLocalVersions } = require('./mojang');
 const { getModsList, toggleMod, getResourcePacksList, openFolder } = require('./modsManager');
+const {
+  getFabricGameVersions,
+  getFabricLoaders,
+  getQuiltGameVersions,
+  getQuiltLoaders,
+  installLoader,
+  detectLoaderType,
+  extractBaseVersion
+} = require('./modloaders');
 const gameLauncher = require('./gameLauncher');
+
 
 const PORT = 38491;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -131,11 +141,83 @@ const server = http.createServer(async (req, res) => {
         } catch (e) {}
 
         const localVersions = getLocalVersions(config.gameDir);
+        const classifiedRemotes = (remoteManifest.versions || []).map(v => ({
+          ...v,
+          loader: 'vanilla',
+          baseVersion: v.id
+        }));
+
         return sendJson(res, 200, {
           success: true,
-          versions: remoteManifest.versions || [],
+          versions: classifiedRemotes,
           localVersions: localVersions
         });
+      }
+
+      // Endpoints de Mod Loaders (Fabric & Quilt)
+      if (pathname === '/api/modloaders/fabric/games' && method === 'GET') {
+        try {
+          const games = await getFabricGameVersions();
+          return sendJson(res, 200, { success: true, games });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, message: err.message });
+        }
+      }
+
+      if (pathname === '/api/modloaders/fabric/loaders' && method === 'GET') {
+        try {
+          const gameVersion = parsedUrl.query.gameVersion;
+          const loaders = await getFabricLoaders(gameVersion);
+          return sendJson(res, 200, { success: true, loaders });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, message: err.message });
+        }
+      }
+
+      if (pathname === '/api/modloaders/quilt/games' && method === 'GET') {
+        try {
+          const games = await getQuiltGameVersions();
+          return sendJson(res, 200, { success: true, games });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, message: err.message });
+        }
+      }
+
+      if (pathname === '/api/modloaders/quilt/loaders' && method === 'GET') {
+        try {
+          const gameVersion = parsedUrl.query.gameVersion;
+          const loaders = await getQuiltLoaders(gameVersion);
+          return sendJson(res, 200, { success: true, loaders });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, message: err.message });
+        }
+      }
+
+      if (pathname === '/api/modloaders/install' && method === 'POST') {
+        try {
+          const body = await parseBody(req);
+          const config = loadConfig();
+          const { loaderType, gameVersion, loaderVersion, setAsSelected } = body;
+
+          if (!loaderType || !gameVersion) {
+            return sendJson(res, 400, { success: false, message: 'Faltan parámetros loaderType o gameVersion' });
+          }
+
+          const result = await installLoader(config.gameDir, loaderType, gameVersion, loaderVersion);
+
+          if (setAsSelected !== false) {
+            config.selectedVersion = result.versionId;
+            saveConfig(config);
+          }
+
+          return sendJson(res, 200, {
+            success: true,
+            result,
+            selectedVersion: config.selectedVersion
+          });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, message: err.message });
+        }
       }
 
       if (pathname === '/api/accounts/offline' && method === 'POST') {

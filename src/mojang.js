@@ -3,6 +3,8 @@ const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const { detectLoaderType, extractBaseVersion } = require('./modloaders');
+
 
 const MANIFEST_URL = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json';
 const CACHE_MANIFEST_PATH = path.join(__dirname, '..', 'data', 'version_manifest.json');
@@ -91,13 +93,31 @@ function getLocalVersions(gameDir) {
       const vId = entry.name;
       const vJson = path.join(versionsDir, vId, `${vId}.json`);
       const vJar = path.join(versionsDir, vId, `${vId}.jar`);
-      if (fs.existsSync(vJson) && fs.existsSync(vJar)) {
-        list.push({
-          id: vId,
-          isLocal: true,
-          jsonPath: vJson,
-          jarPath: vJar
-        });
+      
+      if (fs.existsSync(vJson)) {
+        let vData = null;
+        try {
+          vData = JSON.parse(fs.readFileSync(vJson, 'utf8'));
+        } catch (e) {}
+
+        const loader = detectLoaderType(vId, vData);
+        const baseVersion = extractBaseVersion(vId, vData);
+        const hasJar = fs.existsSync(vJar);
+        const hasInherits = !!(vData && vData.inheritsFrom);
+
+        if (hasJar || hasInherits) {
+          list.push({
+            id: vId,
+            isLocal: true,
+            jsonPath: vJson,
+            jarPath: hasJar ? vJar : null,
+            loader: loader,
+            baseVersion: baseVersion,
+            inheritsFrom: vData?.inheritsFrom || null,
+            type: vData?.type || (loader !== 'vanilla' ? loader : 'custom'),
+            releaseTime: vData?.releaseTime || null
+          });
+        }
       }
     }
   }
@@ -128,9 +148,8 @@ async function extractNatives(jarPath, nativesDir) {
     fs.mkdirSync(nativesDir, { recursive: true });
   }
 
-  // Extraer DLLs del JAR nativo
   return new Promise((resolve) => {
-    const psCmd = `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('${jarPath}', '${nativesDir}')`;
+    const psCmd = `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('${jarPath.replace(/'/g, "''")}', '${nativesDir.replace(/'/g, "''")}')`;
     const child = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCmd], {
       windowsHide: true
     });
@@ -138,6 +157,20 @@ async function extractNatives(jarPath, nativesDir) {
     child.on('error', () => resolve());
   });
 }
+
+function mavenToPath(name) {
+  if (!name || typeof name !== 'string') return null;
+  const parts = name.split(':');
+  if (parts.length < 3) return null;
+  const group = parts[0].replace(/\./g, '/');
+  const artifact = parts[1];
+  const version = parts[2];
+  const classifier = parts[3] ? `-${parts[3]}` : '';
+  const ext = (parts[4] || 'jar').replace(/^@/, '');
+  const filename = `${artifact}-${version}${classifier}.${ext}`;
+  return `${group}/${artifact}/${version}/${filename}`;
+}
+
 
 // Descarga en paralelo con cola de concurrencia
 async function batchDownload(items, concurrency, onProgress) {
@@ -185,18 +218,129 @@ async function prepareVersion(versionId, gameDir, onStatus) {
   }
 
   if (!versionData) {
-    if (onStatus) onStatus('Buscando versión en los servidores de Mojang...', 5);
-    const manifest = await getVersionManifest();
-    const verEntry = manifest.versions.find(v => v.id === versionId);
-    if (!verEntry) {
-      throw new Error(`La versión ${versionId} no existe en el catálogo oficial de Mojang.`);
+    // Si es un loader no instalado localmente, intentar obtener su perfil oficial
+    if (versionId.startsWith('fabric-loader-')) {
+      const match = versionId.match(/^fabric-loader-([^-]+)-(.+)$/i);
+      if (match) {
+        if (onStatus) onStatus(`Descargando perfil de Fabric para Minecraft ${match[2]}...`, 10);
+        const { getFabricProfile } = require('./modloaders');
+        versionData = await getFabricProfile(match[2], match[1]);
+        fs.mkdirSync(versionsDir, { recursive: true });
+        fs.writeFileSync(versionJsonPath, JSON.stringify(versionData, null, 2), 'utf8');
+      }
+    } else if (versionId.startsWith('quilt-loader-')) {
+      const match = versionId.match(/^quilt-loader-([^-]+)-(.+)$/i);
+      if (match) {
+        if (onStatus) onStatus(`Descargando perfil de Quilt para Minecraft ${match[2]}...`, 10);
+        const { getQuiltProfile } = require('./modloaders');
+        versionData = await getQuiltProfile(match[2], match[1]);
+        fs.mkdirSync(versionsDir, { recursive: true });
+        fs.writeFileSync(versionJsonPath, JSON.stringify(versionData, null, 2), 'utf8');
+      }
     }
 
-    if (onStatus) onStatus(`Descargando manifiesto de versión ${versionId}...`, 10);
-    versionData = await httpsGetJson(verEntry.url);
-    fs.mkdirSync(versionsDir, { recursive: true });
-    fs.writeFileSync(versionJsonPath, JSON.stringify(versionData, null, 2), 'utf8');
+    // Si aún no hay versionData, buscar en el catálogo oficial de Mojang
+    if (!versionData) {
+      if (onStatus) onStatus('Buscando versión en los servidores de Mojang...', 5);
+      const manifest = await getVersionManifest();
+      const verEntry = manifest.versions.find(v => v.id === versionId);
+      if (!verEntry) {
+        throw new Error(`La versión "${versionId}" no existe en el catálogo oficial ni en los cargadores soportados.`);
+      }
+
+      if (onStatus) onStatus(`Descargando manifiesto de versión ${versionId}...`, 10);
+      versionData = await httpsGetJson(verEntry.url);
+      fs.mkdirSync(versionsDir, { recursive: true });
+      fs.writeFileSync(versionJsonPath, JSON.stringify(versionData, null, 2), 'utf8');
+    }
   }
+
+  const librariesDir = path.join(gameDir, 'libraries');
+
+  // --- CASO MODLOADER: Versión con herencia (inheritsFrom) ---
+  if (versionData.inheritsFrom) {
+    const baseId = versionData.inheritsFrom;
+    if (onStatus) onStatus(`Preparando versión base de Minecraft (${baseId})...`, 15);
+
+    // Preparar versión base de Mojang (JAR, librerías, assets y nativos)
+    const baseResult = await prepareVersion(baseId, gameDir, onStatus);
+
+    const loaderClasspaths = [];
+    const missingLibsToDownload = [];
+
+    for (const lib of (versionData.libraries || [])) {
+      if (!isLibraryAllowed(lib)) continue;
+
+      let libRelPath = null;
+      let libUrl = null;
+
+      if (lib.downloads?.artifact) {
+        libRelPath = lib.downloads.artifact.path;
+        libUrl = lib.downloads.artifact.url;
+      } else if (lib.name) {
+        libRelPath = mavenToPath(lib.name);
+        let baseUrl = lib.url || 'https://libraries.minecraft.net/';
+        if (!baseUrl.endsWith('/')) baseUrl += '/';
+        libUrl = `${baseUrl}${libRelPath}`;
+      }
+
+      if (libRelPath) {
+        const destPath = path.join(librariesDir, ...libRelPath.split('/'));
+        loaderClasspaths.push(destPath);
+        if (!fs.existsSync(destPath) && libUrl) {
+          missingLibsToDownload.push({ url: libUrl, destPath });
+        }
+      }
+    }
+
+    if (missingLibsToDownload.length > 0) {
+      if (onStatus) onStatus(`Descargando librerías del cargador de mods (0/${missingLibsToDownload.length})...`, 40);
+      await batchDownload(missingLibsToDownload, 10, (done, total) => {
+        const percent = 40 + Math.round((done / total) * 30);
+        if (onStatus) onStatus(`Descargando librerías del cargador (${done}/${total})...`, percent);
+      });
+    }
+
+    // Combinar argumentos y metadatos
+    const mergedVersionData = {
+      ...baseResult.versionData,
+      ...versionData,
+      id: versionId,
+      mainClass: versionData.mainClass || baseResult.versionData.mainClass,
+      assetIndex: versionData.assetIndex || baseResult.versionData.assetIndex,
+      arguments: {
+        jvm: [
+          ...(baseResult.versionData.arguments?.jvm || []),
+          ...(versionData.arguments?.jvm || [])
+        ],
+        game: [
+          ...(baseResult.versionData.arguments?.game || []),
+          ...(versionData.arguments?.game || [])
+        ]
+      }
+    };
+
+    if (versionData.minecraftArguments || baseResult.versionData.minecraftArguments) {
+      mergedVersionData.minecraftArguments = [
+        baseResult.versionData.minecraftArguments || '',
+        versionData.minecraftArguments || ''
+      ].filter(Boolean).join(' ');
+    }
+
+    // Classpath: primero las del cargador, luego las de la versión base
+    const finalClasspaths = [...loaderClasspaths, ...baseResult.classpaths];
+
+    if (onStatus) onStatus('Cargador de mods y archivos verificados.', 98);
+
+    return {
+      versionData: mergedVersionData,
+      classpaths: finalClasspaths,
+      versionJarPath: baseResult.versionJarPath,
+      nativesDir: baseResult.nativesDir
+    };
+  }
+
+  // --- CASO VANILLA: Versión base estándar ---
 
   // 2. Cliente JAR principal
   if (!fs.existsSync(versionJarPath)) {
@@ -209,7 +353,6 @@ async function prepareVersion(versionId, gameDir, onStatus) {
   }
 
   // 3. Librerías
-  const librariesDir = path.join(gameDir, 'libraries');
   const classpaths = [];
   const missingLibsToDownload = [];
   const nativesToExtract = [];
@@ -217,7 +360,7 @@ async function prepareVersion(versionId, gameDir, onStatus) {
   for (const lib of (versionData.libraries || [])) {
     if (!isLibraryAllowed(lib)) continue;
 
-    // Descarga estándar
+    // Descarga estándar por artifact
     if (lib.downloads?.artifact) {
       const artifact = lib.downloads.artifact;
       const libPath = path.join(librariesDir, ...artifact.path.split('/'));
@@ -228,6 +371,21 @@ async function prepareVersion(versionId, gameDir, onStatus) {
           url: artifact.url,
           destPath: libPath
         });
+      }
+    } else if (lib.name) {
+      // Soporte Maven para librerías sin artifact explícito
+      const relPath = mavenToPath(lib.name);
+      if (relPath) {
+        const libPath = path.join(librariesDir, ...relPath.split('/'));
+        classpaths.push(libPath);
+        if (!fs.existsSync(libPath)) {
+          let baseUrl = lib.url || 'https://libraries.minecraft.net/';
+          if (!baseUrl.endsWith('/')) baseUrl += '/';
+          missingLibsToDownload.push({
+            url: `${baseUrl}${relPath}`,
+            destPath: libPath
+          });
+        }
       }
     }
 
@@ -332,3 +490,4 @@ module.exports = {
   getLocalVersions,
   prepareVersion
 };
+

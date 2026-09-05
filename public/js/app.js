@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupCustomizationHandlers();
   setupModsHandlers();
   setupVersionsHandlers();
+  setupInstallLoaderHandlers();
   setupPlayHandler();
   setupSSE();
 
@@ -22,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadVersionsList();
   await loadModsList();
 });
+
 
 // --- Controles de Ventana Nativa Estilo macOS ---
 function setupWindowControls() {
@@ -98,13 +100,22 @@ function setupNavigation() {
         viewSubtitle.textContent = titles[targetView].subtitle;
       }
 
+      if (targetView === 'versions') {
+        loadVersionsList();
+      }
+
       if (targetView === 'mods') {
+        if (launcherConfig) {
+          const localVer = localVersions.find(v => v.id === launcherConfig.selectedVersion);
+          updateModStatusBanner(getLoaderInfo(launcherConfig.selectedVersion, localVer));
+        }
         if (activeModsTab === 'mods') loadModsList();
         else loadResourcePacksList();
       }
     });
   });
 }
+
 
 // --- Carga de Configuración ---
 async function loadInitialConfig() {
@@ -143,6 +154,10 @@ function updateUIFromConfig(totalSystemRam) {
   document.getElementById('windowWidthInput').value = launcherConfig.windowWidth || 1280;
   document.getElementById('windowHeightInput').value = launcherConfig.windowHeight || 720;
   document.getElementById('fullScreenToggle').checked = !!launcherConfig.fullScreen;
+  const closeOnLaunchToggle = document.getElementById('closeOnLaunchToggle');
+  if (closeOnLaunchToggle) {
+    closeOnLaunchToggle.checked = launcherConfig.closeOnLaunch !== false;
+  }
 
   // Java & Directorio
   document.getElementById('customJavaInput').value = launcherConfig.javaPath || '';
@@ -537,6 +552,7 @@ function setupSettingsHandlers() {
       windowWidth: parseInt(document.getElementById('windowWidthInput').value, 10) || 1280,
       windowHeight: parseInt(document.getElementById('windowHeightInput').value, 10) || 720,
       fullScreen: document.getElementById('fullScreenToggle').checked,
+      closeOnLaunch: document.getElementById('closeOnLaunchToggle') ? document.getElementById('closeOnLaunchToggle').checked : true,
       javaPath: document.getElementById('customJavaInput').value.trim(),
       jvmArgs: document.getElementById('jvmArgsInput').value.trim(),
       // Personalización
@@ -703,7 +719,51 @@ async function loadResourcePacksList() {
   }
 }
 
-// --- Versiones ---
+// --- Mod Loaders y Versiones ---
+function getLoaderInfo(versionId, versionObj = null) {
+  const vId = (versionId || '').toLowerCase();
+
+  if (versionObj && versionObj.loader) {
+    return {
+      type: versionObj.loader,
+      label: formatLoaderLabel(versionObj.loader),
+      badgeClass: versionObj.loader,
+      baseVersion: versionObj.baseVersion || versionId
+    };
+  }
+
+  if (vId.includes('fabric')) return { type: 'fabric', label: 'Fabric Loader', badgeClass: 'fabric', baseVersion: extractCleanBase(versionId) };
+  if (vId.includes('quilt')) return { type: 'quilt', label: 'Quilt Loader', badgeClass: 'quilt', baseVersion: extractCleanBase(versionId) };
+  if (vId.includes('neoforge')) return { type: 'neoforge', label: 'NeoForge', badgeClass: 'neoforge', baseVersion: extractCleanBase(versionId) };
+  if (vId.includes('forge')) return { type: 'forge', label: 'Forge', badgeClass: 'forge', baseVersion: extractCleanBase(versionId) };
+  if (vId.includes('optifine')) return { type: 'optifine', label: 'OptiFine', badgeClass: 'optifine', baseVersion: extractCleanBase(versionId) };
+
+  return { type: 'vanilla', label: 'Vanilla Oficial', badgeClass: 'vanilla', baseVersion: versionId };
+}
+
+function extractCleanBase(vId) {
+  const f = (vId || '').match(/^fabric-loader-[^-]+-(.+)$/i);
+  if (f) return f[1];
+  const q = (vId || '').match(/^quilt-loader-[^-]+-(.+)$/i);
+  if (q) return q[1];
+  const forge = (vId || '').match(/^([^-]+)-forge/i);
+  if (forge) return forge[1];
+  const neoforge = (vId || '').match(/^([^-]+)-neoforge/i);
+  if (neoforge) return neoforge[1];
+  return vId;
+}
+
+function formatLoaderLabel(type) {
+  switch (type) {
+    case 'fabric': return 'Fabric';
+    case 'quilt': return 'Quilt';
+    case 'forge': return 'Forge';
+    case 'neoforge': return 'NeoForge';
+    case 'optifine': return 'OptiFine';
+    default: return 'Vanilla';
+  }
+}
+
 async function loadVersionsList() {
   try {
     const res = await fetch('/api/versions');
@@ -747,34 +807,65 @@ function renderVersionsGrid() {
   const search = document.getElementById('versionSearchInput').value.toLowerCase().trim();
   grid.innerHTML = '';
 
-  const localIds = new Set(localVersions.map(v => v.id));
+  const localMap = new Map(localVersions.map(v => [v.id, v]));
 
-  let combined = [...allVersions];
+  // Combinar versiones locales y remotas
+  let combined = [];
+
+  // 1. Añadir locales primero
   localVersions.forEach(lv => {
-    if (!combined.some(v => v.id === lv.id)) {
-      combined.unshift({ id: lv.id, type: 'custom', releaseTime: new Date().toISOString() });
+    combined.push({
+      ...lv,
+      isLocal: true,
+      loader: lv.loader || getLoaderInfo(lv.id, lv).type,
+      type: lv.type || 'instalada'
+    });
+  });
+
+  // 2. Añadir remotas de Mojang
+  allVersions.forEach(rv => {
+    if (!localMap.has(rv.id)) {
+      combined.push({
+        ...rv,
+        isLocal: false,
+        loader: rv.loader || 'vanilla'
+      });
     }
   });
 
   const filtered = combined.filter(v => {
-    const matchesSearch = !search || v.id.toLowerCase().includes(search);
+    const loaderInfo = getLoaderInfo(v.id, v);
+    const matchesSearch = !search || 
+      v.id.toLowerCase().includes(search) || 
+      loaderInfo.label.toLowerCase().includes(search) ||
+      (v.baseVersion && v.baseVersion.toLowerCase().includes(search));
+
     if (!matchesSearch) return false;
 
-    if (activeFilter === 'installed') return localIds.has(v.id);
+    if (activeFilter === 'installed') return v.isLocal;
+    if (activeFilter === 'fabric') return loaderInfo.type === 'fabric';
+    if (activeFilter === 'vanilla') return loaderInfo.type === 'vanilla';
+    if (activeFilter === 'quilt') return loaderInfo.type === 'quilt';
+    if (activeFilter === 'forge') return loaderInfo.type === 'forge' || loaderInfo.type === 'neoforge';
     if (activeFilter === 'release') return v.type === 'release';
     if (activeFilter === 'snapshot') return v.type === 'snapshot';
     return true;
   });
 
   if (filtered.length === 0) {
-    grid.innerHTML = '<div class="loading-spinner">No se encontraron versiones que coincidan con la búsqueda.</div>';
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-dim);">
+        <p style="font-weight: 700; font-size: 15px; color: var(--text-muted); margin-bottom: 8px;">No se encontraron versiones</p>
+        <p style="font-size: 13px;">Prueba a cambiar el filtro o usa el botón <b>"Instalar Cargador"</b> para añadir Fabric o Quilt.</p>
+      </div>
+    `;
     return;
   }
 
-  const toDisplay = filtered.slice(0, 50);
+  const toDisplay = filtered.slice(0, 60);
 
   toDisplay.forEach(v => {
-    const isLocal = localIds.has(v.id);
+    const loaderInfo = getLoaderInfo(v.id, v);
     const isSelected = launcherConfig && launcherConfig.selectedVersion === v.id;
 
     const card = document.createElement('div');
@@ -782,17 +873,22 @@ function renderVersionsGrid() {
     card.innerHTML = `
       <div class="vc-header">
         <div class="vc-title-group">
-          <span class="vc-version-num">${v.id}</span>
-          <span class="vc-release-type">${v.type}</span>
+          <div class="v-name-row">
+            <span class="vc-version-num">${v.id}</span>
+          </div>
+          <span class="vc-release-type">${v.baseVersion && v.baseVersion !== v.id ? `Minecraft ${v.baseVersion} &bull; ` : ''}${v.type || 'Release'}</span>
         </div>
-        <span class="vc-badge ${isLocal ? 'local' : 'remote'}">
-          ${isLocal ? 'Instalado Localmente' : 'Disponible'}
-        </span>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <span class="vc-badge ${loaderInfo.badgeClass}">${loaderInfo.label}</span>
+          <span class="vc-badge ${v.isLocal ? 'local' : 'remote'}">
+            ${v.isLocal ? 'Instalado' : 'Disponible'}
+          </span>
+        </div>
       </div>
       <div class="vc-footer">
-        <span class="vc-date">${v.releaseTime ? v.releaseTime.split('T')[0] : 'Estable'}</span>
+        <span class="vc-date">${v.releaseTime ? v.releaseTime.split('T')[0] : (v.isLocal ? 'Local' : 'Oficial')}</span>
         <button class="vc-btn-select ${isSelected ? 'selected' : ''}">
-          ${isSelected ? 'Seleccionada' : (isLocal ? 'Jugar' : 'Seleccionar')}
+          ${isSelected ? 'Seleccionada' : 'Seleccionar'}
         </button>
       </div>
     `;
@@ -822,18 +918,40 @@ async function selectVersion(versionId, versionType) {
 
   updateSelectedVersionDisplay();
   renderVersionsGrid();
-
-  const btnHome = document.querySelector('.nav-item[data-view="home"]');
-  if (btnHome) btnHome.click();
 }
 
 function updateSelectedVersionDisplay() {
   if (!launcherConfig) return;
   const vId = launcherConfig.selectedVersion;
-  const isLocal = localVersions.some(v => v.id === vId);
+  const localVer = localVersions.find(v => v.id === vId);
+  const isLocal = !!localVer;
+  const loaderInfo = getLoaderInfo(vId, localVer);
 
   document.getElementById('currentVersionName').textContent = vId;
-  document.getElementById('homeDisplayVersion').textContent = `Minecraft ${vId}`;
+  document.getElementById('homeDisplayVersion').textContent = `Minecraft ${loaderInfo.baseVersion || vId}`;
+
+  // Actualizar badges del cargador en Home
+  const homeLoaderBadge = document.getElementById('homeLoaderBadge');
+  if (homeLoaderBadge) {
+    homeLoaderBadge.textContent = loaderInfo.label;
+    homeLoaderBadge.className = `hero-tag-badge loader-badge ${loaderInfo.badgeClass}`;
+  }
+
+  const currentVersionLoaderPill = document.getElementById('currentVersionLoaderPill');
+  if (currentVersionLoaderPill) {
+    currentVersionLoaderPill.textContent = loaderInfo.label;
+    currentVersionLoaderPill.className = `v-loader-pill ${loaderInfo.badgeClass}`;
+  }
+
+  const currentVersionType = document.getElementById('currentVersionType');
+  if (currentVersionType) {
+    currentVersionType.textContent = isLocal ? 'Instalada en Disco Local' : 'Descarga Automática';
+  }
+
+  const homeStatLoader = document.getElementById('homeStatLoader');
+  if (homeStatLoader) {
+    homeStatLoader.textContent = loaderInfo.label;
+  }
 
   const statusBadge = document.getElementById('homeVersionStatusBadge');
   const homeStatLocal = document.getElementById('homeStatLocal');
@@ -845,9 +963,270 @@ function updateSelectedVersionDisplay() {
   } else {
     statusBadge.textContent = 'Listo para Descargar';
     statusBadge.className = 'hero-tag-badge';
-    homeStatLocal.textContent = 'En Servidor Mojang';
+    homeStatLocal.textContent = 'En Servidor';
+  }
+
+  updateModStatusBanner(loaderInfo);
+}
+
+function updateModStatusBanner(loaderInfo) {
+  const banner = document.getElementById('modStatusBanner');
+  if (!banner) return;
+
+  if (loaderInfo.type === 'vanilla') {
+    banner.className = 'mod-status-banner warning';
+    banner.innerHTML = `
+      <div class="mod-status-banner-content">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <span>
+          <strong>Versión Vanilla:</strong> Minecraft Vanilla oficial no ejecuta mods (.jar). Para usar mods, instala o selecciona Fabric o Quilt.
+        </span>
+      </div>
+      <button class="mod-status-banner-btn" id="btnBannerInstallFabric">Instalar Fabric</button>
+    `;
+
+    const btn = document.getElementById('btnBannerInstallFabric');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        openInstallLoaderModal('fabric');
+      });
+    }
+  } else {
+    banner.className = 'mod-status-banner success';
+    banner.innerHTML = `
+      <div class="mod-status-banner-content">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>
+          <strong>Cargador ${loaderInfo.label} activo:</strong> Los mods compatibles colocados en la carpeta mods se cargarán automáticamente al iniciar el juego.
+        </span>
+      </div>
+      <button class="mod-status-banner-btn" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #a7f3d0;" id="btnBannerChangeLoader">Cambiar Versión</button>
+    `;
+
+    const btnChange = document.getElementById('btnBannerChangeLoader');
+    if (btnChange) {
+      btnChange.addEventListener('click', () => {
+        openInstallLoaderModal(loaderInfo.type);
+      });
+    }
   }
 }
+
+
+// --- Modal de Instalación de Fabric y Quilt ---
+let currentSelectedLoaderType = 'fabric';
+let cachedFabricGames = null;
+let cachedQuiltGames = null;
+
+function setupInstallLoaderHandlers() {
+  const modal = document.getElementById('modalInstallLoader');
+  const btnOpen = document.getElementById('btnOpenInstallLoaderModal');
+  const btnClose = document.getElementById('btnCloseInstallLoaderModal');
+  const btnCancel = document.getElementById('btnCancelInstallLoader');
+  const btnSubmit = document.getElementById('btnSubmitInstallLoader');
+  const choiceFabric = document.getElementById('choiceFabric');
+  const choiceQuilt = document.getElementById('choiceQuilt');
+  const mcSelect = document.getElementById('loaderMcVersionSelect');
+  const loaderSelect = document.getElementById('loaderVersionSelect');
+
+  if (btnOpen) {
+    btnOpen.addEventListener('click', () => openInstallLoaderModal('fabric'));
+  }
+  if (btnClose) {
+    btnClose.addEventListener('click', closeInstallLoaderModal);
+  }
+  if (btnCancel) {
+    btnCancel.addEventListener('click', closeInstallLoaderModal);
+  }
+
+  if (choiceFabric) {
+    choiceFabric.addEventListener('click', () => {
+      choiceFabric.classList.add('active');
+      choiceQuilt.classList.remove('active');
+      currentSelectedLoaderType = 'fabric';
+      loadLoaderModalGames('fabric');
+    });
+  }
+
+  if (choiceQuilt) {
+    choiceQuilt.addEventListener('click', () => {
+      choiceQuilt.classList.add('active');
+      choiceFabric.classList.remove('active');
+      currentSelectedLoaderType = 'quilt';
+      loadLoaderModalGames('quilt');
+    });
+  }
+
+  if (mcSelect) {
+    mcSelect.addEventListener('change', () => {
+      const gameVersion = mcSelect.value;
+      if (gameVersion) {
+        loadLoaderVersionsForGame(currentSelectedLoaderType, gameVersion);
+      }
+    });
+  }
+
+  if (btnSubmit) {
+    btnSubmit.addEventListener('click', async () => {
+      const gameVersion = mcSelect.value;
+      const loaderVersion = loaderSelect.value;
+      if (!gameVersion) {
+        alert('Por favor, selecciona una versión de Minecraft');
+        return;
+      }
+
+      const progress = document.getElementById('installLoaderProgress');
+      const progressText = document.getElementById('installLoaderStatusText');
+      const submitText = document.getElementById('btnSubmitInstallLoaderText');
+
+      try {
+        btnSubmit.disabled = true;
+        progress.style.display = 'flex';
+        progressText.textContent = `Instalando ${currentSelectedLoaderType.toUpperCase()} para Minecraft ${gameVersion}...`;
+        submitText.textContent = 'Instalando...';
+
+        const res = await fetch('/api/modloaders/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loaderType: currentSelectedLoaderType,
+            gameVersion: gameVersion,
+            loaderVersion: loaderVersion || undefined,
+            setAsSelected: true
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          launcherConfig.selectedVersion = data.result.versionId;
+          await loadVersionsList();
+          updateSelectedVersionDisplay();
+          closeInstallLoaderModal();
+
+          const btnHome = document.querySelector('.nav-item[data-view="home"]');
+          if (btnHome) btnHome.click();
+        } else {
+          alert('Error en instalación: ' + (data.message || 'Fallo desconocido'));
+        }
+      } catch (err) {
+        alert('Error conectando con el servidor: ' + err.message);
+      } finally {
+        btnSubmit.disabled = false;
+        progress.style.display = 'none';
+        submitText.textContent = 'Instalar y Seleccionar';
+      }
+    });
+  }
+}
+
+async function openInstallLoaderModal(defaultLoader = 'fabric') {
+  const modal = document.getElementById('modalInstallLoader');
+  const choiceFabric = document.getElementById('choiceFabric');
+  const choiceQuilt = document.getElementById('choiceQuilt');
+
+  currentSelectedLoaderType = defaultLoader;
+  if (defaultLoader === 'quilt') {
+    if (choiceQuilt) choiceQuilt.classList.add('active');
+    if (choiceFabric) choiceFabric.classList.remove('active');
+  } else {
+    if (choiceFabric) choiceFabric.classList.add('active');
+    if (choiceQuilt) choiceQuilt.classList.remove('active');
+  }
+
+  if (modal) modal.classList.add('active');
+  await loadLoaderModalGames(currentSelectedLoaderType);
+}
+
+function closeInstallLoaderModal() {
+  const modal = document.getElementById('modalInstallLoader');
+  if (modal) modal.classList.remove('active');
+}
+
+async function loadLoaderModalGames(loaderType) {
+  const mcSelect = document.getElementById('loaderMcVersionSelect');
+  if (!mcSelect) return;
+  mcSelect.innerHTML = '<option value="">Cargando versiones soportadas...</option>';
+
+  try {
+    let games = [];
+    if (loaderType === 'fabric') {
+      if (!cachedFabricGames) {
+        const res = await fetch('/api/modloaders/fabric/games');
+        const data = await res.json();
+        cachedFabricGames = data.games || [];
+      }
+      games = cachedFabricGames;
+    } else {
+      if (!cachedQuiltGames) {
+        const res = await fetch('/api/modloaders/quilt/games');
+        const data = await res.json();
+        cachedQuiltGames = data.games || [];
+      }
+      games = cachedQuiltGames;
+    }
+
+    mcSelect.innerHTML = '';
+    
+    // Identificar versión sugerida basada en la seleccionada actualmente o la más reciente
+    const currentBase = launcherConfig ? (getLoaderInfo(launcherConfig.selectedVersion).baseVersion) : null;
+
+    games.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.version;
+      opt.textContent = `${g.version}${g.stable ? ' (Estable)' : ' (Snapshot / Pre)'}`;
+      if (currentBase && g.version === currentBase) {
+        opt.selected = true;
+      }
+      mcSelect.appendChild(opt);
+    });
+
+    // Cargar loaders para la versión seleccionada por defecto
+    const initialGame = mcSelect.value || (games[0] ? games[0].version : null);
+    if (initialGame) {
+      loadLoaderVersionsForGame(loaderType, initialGame);
+    }
+  } catch (err) {
+    mcSelect.innerHTML = '<option value="">Error cargando versiones</option>';
+  }
+}
+
+async function loadLoaderVersionsForGame(loaderType, gameVersion) {
+  const loaderSelect = document.getElementById('loaderVersionSelect');
+  if (!loaderSelect) return;
+  loaderSelect.innerHTML = '<option value="">Buscando versiones del cargador...</option>';
+
+  try {
+    const endpoint = loaderType === 'fabric'
+      ? `/api/modloaders/fabric/loaders?gameVersion=${encodeURIComponent(gameVersion)}`
+      : `/api/modloaders/quilt/loaders?gameVersion=${encodeURIComponent(gameVersion)}`;
+
+    const res = await fetch(endpoint);
+    const data = await res.json();
+    const loaders = data.loaders || [];
+
+    loaderSelect.innerHTML = '';
+    loaders.forEach((l, idx) => {
+      const opt = document.createElement('option');
+      opt.value = l.version;
+      opt.textContent = `${l.version}${l.stable ? ' (Recomendada)' : ' (Beta)'}`;
+      if (idx === 0) opt.selected = true;
+      loaderSelect.appendChild(opt);
+    });
+
+    if (loaders.length === 0) {
+      loaderSelect.innerHTML = '<option value="">No se encontraron loaders compatibles</option>';
+    }
+  } catch (err) {
+    loaderSelect.innerHTML = '<option value="">Error cargando versiones del cargador</option>';
+  }
+}
+
 
 // --- Lanzamiento del Juego ---
 function setupPlayHandler() {
@@ -913,6 +1292,16 @@ function setupSSE() {
         btnPlay.classList.add('running');
         playBtnText.textContent = 'JUGANDO';
         progressBarContainer.classList.remove('active');
+
+        if (launcherConfig && launcherConfig.closeOnLaunch !== false) {
+          setTimeout(() => {
+            if (window.chrome && window.chrome.webview) {
+              window.chrome.webview.postMessage('close');
+            } else {
+              window.close();
+            }
+          }, 1200);
+        }
       } else {
         btnPlay.classList.add('disabled');
         progressBarContainer.classList.add('active');

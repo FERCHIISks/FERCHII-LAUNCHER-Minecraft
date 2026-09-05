@@ -1,4 +1,4 @@
-﻿# FERCHII LAUNCHER - Minecraft Java Edition
+# FERCHII LAUNCHER - Minecraft Java Edition
 
 Creado por FERCHII Sks (Eduar Fernando Marin Gonzalez).
 Este proyecto es codigo abierto (Open Source), pero recuerda no editar ni redistribuir sin el permiso del creador.
@@ -24,6 +24,8 @@ Por ahora este programa no esta pensado para publicarse de forma abierta a todo 
 - Consume muy poca memoria en tu computadora (alrededor de 40 a 60 MB de memoria RAM), para que tu equipo no se ponga lento.
 - No necesitas tener Java instalado en tu computadora. El launcher se encarga de buscar y preparar la version exacta de Java que necesita cada version de Minecraft por si solo (esta parte la hice para que cada quien tenga una experiencia mucho mas comoda y no tenga que batallar buscando instaladores).
 - Permite jugar tanto en modo No-Premium (escribes tu nombre y te carga tu skin) como en modo Premium (iniciando sesion con tu cuenta oficial de Microsoft mediante codigo seguro).
+- Soporte e instalación directa de cargadores de mods (Fabric y Quilt) con descarga automática de librerías y dependencias Maven.
+- Cierre automático opcional del launcher tras iniciar Minecraft para liberar memoria RAM.
 - Selector de versiones de Minecraft conectado directamente con Mojang. Si una version ya la descargaste una vez, la proxima vez inicia de inmediato sin volver a descargar nada.
 - Ajustes faciles: puedes elegir cuanta memoria RAM asignarle al juego mediante una barra deslizable (ojo, si tu computadora tiene poca memoria no le pongas demasiada, con 2 GB o 3 GB funciona mas que bien).
 - Consola de registro en vivo para que puedas ver que esta pasando por detras mientras carga el juego.
@@ -33,7 +35,7 @@ Por ahora este programa no esta pensado para publicarse de forma abierta a todo 
 
 Para que no tengas que instalar librerias ni configurar nada raro, aqui tienes el paquete listo para descomprimir y jugar:
 
-- Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER ZIP (Ejecutable y Dependencias)](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.2/Ferchii_Launcher_v3.2_Clean.zip)
+- Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER v3.3 ZIP](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.3/Ferchii_Launcher_v3.3_Clean.zip)
 
 (Nota: Sube el archivo comprimido a tu servicio de almacenamiento preferido como Google Drive, OneDrive, MediaFire o a los Releases de GitHub y coloca el enlace aqui).
 

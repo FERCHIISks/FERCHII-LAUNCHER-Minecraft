@@ -156,12 +156,17 @@
             <div class="hero-content">
               <div class="hero-tags">
                 <span class="hero-tag-badge">Java Edition</span>
+                <span class="hero-tag-badge loader-badge" id="homeLoaderBadge">Vanilla</span>
                 <span class="hero-tag-badge status-tag" id="homeVersionStatusBadge">Listo</span>
               </div>
               <h2 class="hero-title" id="homeDisplayVersion">Minecraft 26.2</h2>
-              <p class="hero-desc">FERCHII LAUNCHER: Plataforma gaming autónoma con GUI Glassmorphism translúcida, gestor de mods integrado y rendimiento optimizado.</p>
+              <p class="hero-desc">FERCHII LAUNCHER: Plataforma gaming autónoma con GUI Glassmorphism translúcida, gestor de mods integrado y compatibilidad oficial con Fabric, Quilt, Forge y Vanilla.</p>
               
               <div class="hero-stats">
+                <div class="stat-box">
+                  <span class="stat-label">Cargador Activo</span>
+                  <span class="stat-value" id="homeStatLoader">Vanilla Oficial</span>
+                </div>
                 <div class="stat-box">
                   <span class="stat-label">Memoria Asignada</span>
                   <span class="stat-value" id="homeStatRam">2 GB</span>
@@ -186,8 +191,11 @@
                 <label class="dock-label">Versión Seleccionada</label>
                 <div class="version-dropdown-trigger" id="versionSelectorBtn">
                   <div class="v-info">
-                    <span class="v-name" id="currentVersionName">26.2</span>
-                    <span class="v-type" id="currentVersionType">Release</span>
+                    <div class="v-name-row">
+                      <span class="v-name" id="currentVersionName">26.2</span>
+                      <span class="v-loader-pill" id="currentVersionLoaderPill">Vanilla</span>
+                    </div>
+                    <span class="v-type" id="currentVersionType">Release Oficial</span>
                   </div>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"></polyline>
@@ -225,17 +233,30 @@
         <!-- VISTA 2: VERSIONES -->
         <section class="view-panel" id="view-versions">
           <div class="versions-header">
-            <div class="search-box">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-              <input type="text" id="versionSearchInput" placeholder="Buscar versión (ej. 26.2, 1.20.4, 1.16.5, 1.8.9)...">
+            <div class="versions-header-top">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="versionSearchInput" placeholder="Buscar versión (ej. Fabric, 1.20.4, 1.16.5, 26.2)...">
+              </div>
+
+              <button class="btn-primary btn-install-loader" id="btnOpenInstallLoaderModal">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span>Instalar Cargador (Fabric / Quilt)</span>
+              </button>
             </div>
 
             <div class="filter-tabs">
               <button class="filter-tab active" data-filter="all">Todas</button>
-              <button class="filter-tab" data-filter="installed">Instaladas Localmente</button>
+              <button class="filter-tab" data-filter="installed">Instaladas</button>
+              <button class="filter-tab" data-filter="fabric">Fabric</button>
+              <button class="filter-tab" data-filter="vanilla">Vanilla</button>
+              <button class="filter-tab" data-filter="quilt">Quilt</button>
+              <button class="filter-tab" data-filter="forge">Forge / NeoForge</button>
               <button class="filter-tab" data-filter="release">Releases</button>
               <button class="filter-tab" data-filter="snapshot">Snapshots</button>
             </div>
@@ -248,6 +269,9 @@
 
         <!-- VISTA: MODS Y TEXTURAS -->
         <section class="view-panel" id="view-mods">
+          <!-- Banner Informativo del Cargador Activo -->
+          <div class="mod-status-banner" id="modStatusBanner"></div>
+
           <div class="mods-header">
             <div class="mods-tabs">
               <button class="mods-tab active" id="tabMods">Mods Instalados (.jar)</button>
@@ -438,6 +462,17 @@
                   <span class="slider round"></span>
                 </label>
               </div>
+
+              <div class="form-toggle-row">
+                <div class="toggle-info">
+                  <span class="toggle-title">Cerrar el launcher al iniciar</span>
+                  <span class="toggle-desc">Cierra automáticamente la ventana tras abrir Minecraft para liberar memoria RAM.</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="closeOnLaunchToggle">
+                  <span class="slider round"></span>
+                </label>
+              </div>
             </div>
 
             <!-- Tarjeta Java & Avanzado -->
@@ -594,6 +629,103 @@
     </div>
   </div>
 
+  <!-- Modal: Instalar Cargador de Mods (Fabric / Quilt) -->
+  <div class="modal-overlay" id="modalInstallLoader">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div class="modal-title-with-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" style="color: var(--accent-cyan);">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <h3>Instalar Cargador de Mods</h3>
+        </div>
+        <button class="modal-close" id="btnCloseInstallLoaderModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-subtitle">
+          Selecciona tu cargador de mods preferido y la versión de Minecraft para instalarlo de forma automática.
+        </p>
+
+        <!-- Selección de Cargador -->
+        <div class="form-group">
+          <label>Cargador de Mods</label>
+          <div class="loader-choice-grid">
+            <div class="loader-choice-card active" data-loader="fabric" id="choiceFabric">
+              <div class="loader-choice-badge">RECOMENDADO</div>
+              <div class="loader-choice-icon">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" style="color: var(--accent-cyan);">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+              </div>
+              <div class="loader-choice-info">
+                <strong>Fabric Loader</strong>
+                <span>Máximo rendimiento y optimización moderna.</span>
+              </div>
+            </div>
+            <div class="loader-choice-card" data-loader="quilt" id="choiceQuilt">
+              <div class="loader-choice-badge">MODULAR</div>
+              <div class="loader-choice-icon">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" style="color: var(--accent-purple);">
+                  <rect x="3" y="3" width="8" height="8" rx="1"></rect>
+                  <rect x="13" y="3" width="8" height="8" rx="1"></rect>
+                  <rect x="3" y="13" width="8" height="8" rx="1"></rect>
+                  <rect x="13" y="13" width="8" height="8" rx="1"></rect>
+                </svg>
+              </div>
+              <div class="loader-choice-info">
+                <strong>Quilt Loader</strong>
+                <span>Compatible con Fabric y modular.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Versión de Minecraft -->
+        <div class="form-group">
+          <div class="form-label-row">
+            <label for="loaderMcVersionSelect">Versión de Minecraft</label>
+            <span class="label-hint" id="mcVersionFilterHint">Mostrando versiones soportadas</span>
+          </div>
+          <div class="custom-select-wrapper">
+            <select id="loaderMcVersionSelect" class="custom-select">
+              <option value="">Cargando catálogo de versiones compatibles...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Versión del Loader -->
+        <div class="form-group">
+          <div class="form-label-row">
+            <label for="loaderVersionSelect">Versión del Loader</label>
+            <span class="label-hint" id="loaderVersionHint">Última versión recomendada</span>
+          </div>
+          <div class="custom-select-wrapper">
+            <select id="loaderVersionSelect" class="custom-select">
+              <option value="">Selecciona una versión de Minecraft primero</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="install-loader-progress" id="installLoaderProgress" style="display: none;">
+          <div class="loading-pulse"></div>
+          <span id="installLoaderStatusText">Descargando e instalando perfil oficial...</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btnCancelInstallLoader">Cancelar</button>
+        <button class="btn-primary" id="btnSubmitInstallLoader">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="btnSubmitInstallLoaderText">Instalar y Seleccionar</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/app.js"></script>
 </body>
 </html>
+

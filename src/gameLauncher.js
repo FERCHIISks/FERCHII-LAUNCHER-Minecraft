@@ -256,9 +256,11 @@ class GameLauncher {
 
       const child = spawn(consoleJavaExe, finalArgs, {
         cwd: config.gameDir,
-        detached: false,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
       });
+      child.unref();
 
       this.activeProcess = child;
       this.emitStatus('running', `Minecraft ${versionId} en ejecución`, 100, versionId);

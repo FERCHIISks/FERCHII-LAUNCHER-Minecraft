@@ -6,14 +6,23 @@ const { execSync, spawn } = require('child_process');
 const RUNTIME_DIR = path.join(__dirname, '..', 'data', 'runtime');
 
 function getRequiredJavaMajorVersion(mcVersionStr, versionData) {
-  // 1. Si el JSON de Mojang especifica la versión de Java directamente, usar esa
+  // 1. Si el JSON de la versión o versión base especifica la versión de Java directamente, usar esa
   if (versionData?.javaVersion?.majorVersion) {
     return versionData.javaVersion.majorVersion;
   }
 
-  // 2. Si no, inferir a partir del número de versión
-  const match = mcVersionStr.match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
+  // 2. Extraer la versión real de Minecraft en caso de cargador de mods (Fabric, Quilt, Forge, etc.)
+  let cleanVersion = mcVersionStr;
+  if (versionData?.inheritsFrom) {
+    cleanVersion = versionData.inheritsFrom;
+  } else {
+    const { extractBaseVersion } = require('./modloaders');
+    cleanVersion = extractBaseVersion(mcVersionStr, versionData);
+  }
+
+  const match = cleanVersion.match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
   if (!match) return 21;
+
 
   const major = parseInt(match[1], 10);
   const minor = parseInt(match[2], 10);

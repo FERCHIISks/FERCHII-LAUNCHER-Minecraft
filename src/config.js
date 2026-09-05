@@ -30,6 +30,7 @@ function getDefaultConfig() {
     windowWidth: 1280,
     windowHeight: 720,
     fullScreen: false,
+    closeOnLaunch: true,
     gameDir: getDefaultGameDir(),
     javaPath: '',
     jvmArgs: '-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC',
@@ -41,6 +42,7 @@ function getDefaultConfig() {
     bgImageOpacity: 45
   };
 }
+
 
 function loadConfig() {
   try {
