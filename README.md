@@ -33,7 +33,7 @@ Por ahora este programa no esta pensado para publicarse de forma abierta a todo 
 
 Para que no tengas que instalar librerias ni configurar nada raro, aqui tienes el paquete listo para descomprimir y jugar:
 
-- Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER ZIP (Ejecutable y Dependencias)](TU_ENLACE_DE_DESCARGA_AQUI)
+- Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER ZIP (Ejecutable y Dependencias)](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.2/Ferchii_Launcher_v3.2_Clean.zip)
 
 (Nota: Sube el archivo comprimido a tu servicio de almacenamiento preferido como Google Drive, OneDrive, MediaFire o a los Releases de GitHub y coloca el enlace aqui).
 
@@ -61,3 +61,4 @@ Desarrollado y disenado por:
 Eduar Fernando Marin Gonzalez (FERCHII Sks)
 
 Todos los derechos reservados sobre el diseno y la adaptacion del launcher. Proyecto compartido de manera privada y personal con fines educativos y de entretenimiento para companeros universitarios.
+
