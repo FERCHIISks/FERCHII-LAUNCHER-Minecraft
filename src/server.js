@@ -17,6 +17,7 @@ const {
   extractBaseVersion
 } = require('./modloaders');
 const gameLauncher = require('./gameLauncher');
+const updater = require('./updater');
 
 
 const PORT = 38491;
@@ -341,6 +342,31 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/logs/clear' && method === 'POST') {
         gameLauncher.clearLogs();
         return sendJson(res, 200, { success: true });
+      }
+
+      if (pathname === '/api/updates/check' && method === 'GET') {
+        const force = parsedUrl.query && parsedUrl.query.force === 'true';
+        const updateInfo = await updater.checkForUpdates(force);
+        return sendJson(res, 200, { success: true, update: updateInfo });
+      }
+
+      if (pathname === '/api/updates/apply' && method === 'POST') {
+        const body = await parseBody(req);
+        const downloadUrl = body.downloadUrl;
+        if (!downloadUrl) {
+          return sendJson(res, 400, { success: false, message: 'URL de descarga no proporcionada' });
+        }
+
+        // Ejecutar actualización reportando por SSE
+        updater.applyUpdate(downloadUrl, (message, progress) => {
+          broadcastSSE('updateProgress', { message, progress });
+        }).then((result) => {
+          broadcastSSE('updateProgress', { message: 'Actualización finalizada con éxito.', progress: 100, done: true });
+        }).catch((err) => {
+          broadcastSSE('updateProgress', { message: 'Error: ' + err.message, progress: 0, error: true });
+        });
+
+        return sendJson(res, 200, { success: true, message: 'Actualización en curso' });
       }
 
       if (pathname === '/api/exit' && method === 'POST') {

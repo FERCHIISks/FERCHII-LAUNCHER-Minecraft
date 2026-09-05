@@ -92,6 +92,16 @@
         </div>
 
         <div class="topbar-right no-drag">
+          <!-- Indicador de Actualización Disponible -->
+          <div class="update-indicator-badge" id="topbarUpdateBadge" style="display: none;" title="Nueva versión disponible">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span id="topbarUpdateText">v3.4 Disponible</span>
+          </div>
+
           <!-- Selector de Cuentas -->
           <div class="account-selector" id="accountSelectorBtn">
             <div class="account-avatar-wrapper">
@@ -720,6 +730,79 @@
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
           <span id="btnSubmitInstallLoaderText">Instalar y Seleccionar</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: ACTUALIZACIÓN DISPONIBLE -->
+  <div class="modal-backdrop" id="modalUpdate">
+    <div class="modal-card modal-update-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="update-pulse-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </div>
+          <h3>Nueva Versión Disponible</h3>
+        </div>
+        <button class="modal-close" id="btnCloseUpdateModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="update-versions-row">
+          <div class="update-ver-box current">
+            <span class="ver-label">Versión Actual</span>
+            <span class="ver-number" id="updateCurrentVer">3.3</span>
+          </div>
+          <div class="update-ver-arrow">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </div>
+          <div class="update-ver-box new">
+            <span class="ver-label">Nueva Versión</span>
+            <span class="ver-number" id="updateNewVer">3.4</span>
+          </div>
+        </div>
+
+        <div class="update-notes-wrapper">
+          <label class="update-notes-label">Novedades y Mejoras:</label>
+          <div class="update-notes-box" id="updateChangelogBox">
+            Cargando notas de la versión...
+          </div>
+        </div>
+
+        <div class="update-safe-notice">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span>Tus cuentas, configuraciones y mundos se mantendrán intactos.</span>
+        </div>
+
+        <!-- Barra de Progreso de Descarga e Instalación -->
+        <div class="update-progress-container" id="updateProgressContainer" style="display: none;">
+          <div class="update-progress-info">
+            <span id="updateProgressStatusText">Descargando archivos...</span>
+            <span id="updateProgressPercentText">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="updateProgressBarFill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="btnPostponeUpdate">Más tarde</button>
+        <button class="btn-primary btn-do-update" id="btnStartUpdate">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="btnStartUpdateText">Actualizar Ahora</span>
         </button>
       </div>
     </div>

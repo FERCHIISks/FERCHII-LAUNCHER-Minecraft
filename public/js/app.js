@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupVersionsHandlers();
   setupInstallLoaderHandlers();
   setupPlayHandler();
+  setupUpdateHandlers();
   setupSSE();
 
   await loadInitialConfig();
@@ -1266,6 +1267,98 @@ function setupPlayHandler() {
   });
 }
 
+// --- Sistema de Actualización Automática ---
+let currentAvailableUpdate = null;
+
+function setupUpdateHandlers() {
+  const topbarBadge = document.getElementById('topbarUpdateBadge');
+  const topbarText = document.getElementById('topbarUpdateText');
+  const modalUpdate = document.getElementById('modalUpdate');
+  const btnCloseModal = document.getElementById('btnCloseUpdateModal');
+  const btnPostpone = document.getElementById('btnPostponeUpdate');
+  const btnStartUpdate = document.getElementById('btnStartUpdate');
+  const btnStartUpdateText = document.getElementById('btnStartUpdateText');
+  const curVerSpan = document.getElementById('updateCurrentVer');
+  const newVerSpan = document.getElementById('updateNewVer');
+  const changelogBox = document.getElementById('updateChangelogBox');
+  const progressContainer = document.getElementById('updateProgressContainer');
+  const progressStatusText = document.getElementById('updateProgressStatusText');
+  const progressPercentText = document.getElementById('updateProgressPercentText');
+  const progressBarFill = document.getElementById('updateProgressBarFill');
+
+  if (topbarBadge) {
+    topbarBadge.addEventListener('click', () => {
+      if (currentAvailableUpdate) {
+        modalUpdate.classList.add('active');
+      }
+    });
+  }
+
+  if (btnCloseModal) {
+    btnCloseModal.addEventListener('click', () => modalUpdate.classList.remove('active'));
+  }
+  if (btnPostpone) {
+    btnPostpone.addEventListener('click', () => modalUpdate.classList.remove('active'));
+  }
+
+  if (btnStartUpdate) {
+    btnStartUpdate.addEventListener('click', async () => {
+      if (!currentAvailableUpdate || !currentAvailableUpdate.downloadUrl) return;
+
+      try {
+        btnStartUpdate.disabled = true;
+        btnStartUpdateText.textContent = 'Actualizando...';
+        if (progressContainer) progressContainer.style.display = 'flex';
+        if (progressStatusText) progressStatusText.textContent = 'Iniciando descarga del paquete oficial...';
+        if (progressPercentText) progressPercentText.textContent = '0%';
+        if (progressBarFill) progressBarFill.style.width = '0%';
+
+        const res = await fetch('/api/updates/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ downloadUrl: currentAvailableUpdate.downloadUrl })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert('Error al actualizar: ' + data.message);
+          btnStartUpdate.disabled = false;
+          btnStartUpdateText.textContent = 'Actualizar Ahora';
+          if (progressContainer) progressContainer.style.display = 'none';
+        }
+      } catch (err) {
+        alert('Error de conexión al aplicar actualización: ' + err.message);
+        btnStartUpdate.disabled = false;
+        btnStartUpdateText.textContent = 'Actualizar Ahora';
+        if (progressContainer) progressContainer.style.display = 'none';
+      }
+    });
+  }
+
+  // Verificación automática en segundo plano tras 2.5 segundos
+  setTimeout(async () => {
+    try {
+      const res = await fetch('/api/updates/check');
+      const data = await res.json();
+      if (data.success && data.update && data.update.hasUpdate) {
+        currentAvailableUpdate = data.update;
+        if (topbarBadge && topbarText) {
+          topbarText.textContent = `v${data.update.latestVersion} Disponible`;
+          topbarBadge.style.display = 'flex';
+        }
+        if (curVerSpan) curVerSpan.textContent = data.update.currentVersion;
+        if (newVerSpan) newVerSpan.textContent = data.update.latestVersion;
+        if (changelogBox) changelogBox.textContent = data.update.releaseNotes || 'Mejoras y correcciones generales.';
+
+        // Mostrar modal amigable automáticamente una vez por sesión
+        if (!sessionStorage.getItem('update_notified_' + data.update.latestVersion)) {
+          sessionStorage.setItem('update_notified_' + data.update.latestVersion, 'true');
+          modalUpdate.classList.add('active');
+        }
+      }
+    } catch (e) {}
+  }, 2500);
+}
+
 // --- Server-Sent Events (SSE) en Tiempo Real ---
 function setupSSE() {
   const evtSource = new EventSource('/api/events');
@@ -1321,6 +1414,33 @@ function setupSSE() {
       terminalOutput.appendChild(line);
 
       terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    } catch (err) {}
+  });
+
+  evtSource.addEventListener('updateProgress', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      const progressContainer = document.getElementById('updateProgressContainer');
+      const progressStatusText = document.getElementById('updateProgressStatusText');
+      const progressPercentText = document.getElementById('updateProgressPercentText');
+      const progressBarFill = document.getElementById('updateProgressBarFill');
+      const btnStartUpdate = document.getElementById('btnStartUpdate');
+      const btnStartUpdateText = document.getElementById('btnStartUpdateText');
+
+      if (progressContainer) progressContainer.style.display = 'flex';
+      if (progressStatusText) progressStatusText.textContent = data.message;
+      if (progressPercentText && data.progress !== undefined) progressPercentText.textContent = `${data.progress}%`;
+      if (progressBarFill && data.progress !== undefined) progressBarFill.style.width = `${data.progress}%`;
+
+      if (data.done) {
+        if (btnStartUpdateText) btnStartUpdateText.textContent = 'Actualizado';
+        setTimeout(() => {
+          window.location.reload();
+        }, 1800);
+      } else if (data.error) {
+        if (btnStartUpdate) btnStartUpdate.disabled = false;
+        if (btnStartUpdateText) btnStartUpdateText.textContent = 'Reintentar Actualización';
+      }
     } catch (err) {}
   });
 
