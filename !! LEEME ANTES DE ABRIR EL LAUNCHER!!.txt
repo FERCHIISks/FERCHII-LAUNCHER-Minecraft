@@ -1,0 +1,41 @@
+# FERCHII LAUNCHER - Minecraft Java Edition (by Ferchii sks) - Es open Source pero no editar sin el permiso del creador :D!!!
+
+Lanzador de Minecraft Java Edition de alto rendimiento y diseño casi profesional , optimizado para equipos de bajos y altos recursos.
+
+
+
+# Características Principales
+
+  - Estética oscura gaming moderna con acentos cyan y esmeralda.
+  - Animaciones fluidas con transiciones de pestañas, efectos hover y barra de progreso en tiempo real.
+  - Se ejecuta en una ventana independiente y optimizada (Edge Chromium App Mode / WebView2 nativo de Windows) consumiendo un mínimo de memoria RAM (~40-60 MB).
+
+-- Gestión Total de Cuentas (Premium y No-Premium)
+  - *Modo No-Premium (Offline)*: Permite ingresar cualquier nombre de usuario, genera el UUID oficial ("UUIDv3 MD5") y carga la skin automáticamente mediante APIs oficiales de renderizado.
+  - *Modo Premium (Microsoft)**: Soporte para vincular cuentas oficiales de Microsoft atra vez de Device Code OAuth2.
+  - Selector rápido de cuentas en la barra superior con estado.
+
+- *Descarga Inteligente y Ejecución Local Instantánea*:
+  - Conexión directa a los servidores oficiales de Mojang ("launchermeta.mojang.com").
+  - *Caché Local*: Si la versión ya está descargada, el launcher la inicia directamente desde los archivos locales sin volver a descargarlo.
+
+- *Gestor Autónomo de Java (Cero Instalaciones Externas)*:
+  - "No necesitas tener Java instalado en tu PC". "(esta parte lo hice para que el usuario tenga una mejor experiencia a la hora de usar el launcher)"
+  - El launcher detecta la versión requerida (Java 8 para <= 1.16.4, Java 17 para 1.17-1.20.4, Java 21 para 1.20.5+) y descarga automáticamente OpenJDK portable optimizado en la carpeta "data/runtime/".
+
+- *Opciones del launcher*
+  - Asignador de memoria RAM con deslizador interactivo (desde 1 GB hasta el total real de tu PC). "(ojo si tienes poca ram no uses demasiada este launcher no requiere mucha ram con 2 GB esta mas que bien)"
+  - Selector de resolución de pantalla (Ancho x Alto) y modo pantalla completa.
+  - Consola de logs en vivo integrada con filtrado y copia al portapapeles. (para que veas el proceso que se esta ejecutando)
+
+---
+
+# Como Iniciar el Launcher
+
+Simplemente haz doble clic en: "Launcher.exe"
+
+
+Eso es todo! El launcher se abrirá automáticamente en una ventana en el pc y estara listo para jugar. (espero lo disfrutes esta es una modificacion a el launcher anterior de la version V3.1)
+
+
+!!!! ESTE LAUNCHER ES SOLO PARA COMPAÑEROS DE ESTUDIO POR AHORA NO ESTA A LA DESCARGA DEL PUBLICO ¡¡¡¡¡ !!! SI ESTAS VIENDO ESTO DESDE OTRO LADO QUE NO SEA UN LINK DE EDUAR ENTONCES DA CREDITOS A FERCHII¡¡¡
