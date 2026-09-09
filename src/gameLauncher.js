@@ -144,7 +144,7 @@ class GameLauncher {
         '${assets_index_name}': assetIndexId,
         '${auth_uuid}': account.uuid,
         '${auth_access_token}': account.accessToken || '00000000000000000000000000000000',
-        '${user_type}': (account.type === 'microsoft' ? 'msa' : 'mojang'),
+        '${user_type}': (account.type === 'microsoft' ? 'msa' : 'legacy'),
         '${version_type}': versionData.type || 'release',
         '${user_properties}': '{}',
         '${natives_directory}': nativesDir,
@@ -262,6 +262,7 @@ class GameLauncher {
       });
       child.unref();
 
+      const launchStartTime = Date.now();
       this.activeProcess = child;
       this.emitStatus('running', `Minecraft ${versionId} en ejecución`, 100, versionId);
       this.emitLog('[Juego] Proceso de Minecraft en ejecución activa.');
@@ -282,6 +283,20 @@ class GameLauncher {
 
       child.on('close', (code) => {
         this.emitLog(`[Juego] Minecraft finalizó con código: ${code}`);
+        const durationSec = Math.round((Date.now() - launchStartTime) / 1000);
+        if (durationSec >= 3 && account && account.id) {
+          try {
+            const { loadConfig, saveConfig } = require('./config');
+            const cfg = loadConfig();
+            const targetAcc = (cfg.accounts || []).find(a => a.id === account.id);
+            if (targetAcc) {
+              targetAcc.playTimeSeconds = (targetAcc.playTimeSeconds || 0) + durationSec;
+              saveConfig(cfg);
+              const mins = Math.round(durationSec / 60);
+              this.emitLog(`[Estadísticas] Sesión finalizada: +${mins > 0 ? mins + ' min' : durationSec + ' seg'} registrados.`);
+            }
+          } catch (e) {}
+        }
         this.activeProcess = null;
         this.emitStatus('idle', 'Listo para jugar', 0, null);
       });

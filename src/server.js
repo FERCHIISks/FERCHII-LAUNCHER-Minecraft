@@ -155,6 +155,136 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // Endpoint de Noticias de Mojang (Minecraft News)
+      if (pathname === '/api/news' && method === 'GET') {
+        try {
+          const https = require('https');
+          const newsData = await new Promise((resolve) => {
+            const req = https.get('https://launchercontent.mojang.com/news.json', {
+              headers: { 'User-Agent': 'Ferchii-Launcher/3.4' }
+            }, (res) => {
+              let d = '';
+              res.on('data', chunk => d += chunk);
+              res.on('end', () => {
+                try {
+                  const parsed = JSON.parse(d);
+                  resolve(parsed.entries || []);
+                } catch {
+                  resolve([]);
+                }
+              });
+            });
+            req.on('error', () => resolve([]));
+            req.setTimeout(5000, () => {
+              req.destroy();
+              resolve([]);
+            });
+          });
+
+          const finalNews = (newsData && newsData.length > 0) ? newsData.slice(0, 6) : [
+            {
+              title: "Minecraft Java Edition: Novedades y Actualizaciones",
+              tag: "Oficial",
+              category: "Java Edition",
+              text: "Descubre las últimas mejoras, snapshots y cambios de rendimiento para la versión Java Edition.",
+              playPageImage: { url: "" }
+            },
+            {
+              title: "Servidor INGENIEROSMC Compatible",
+              tag: "Comunidad",
+              category: "Crossplay",
+              text: "Conéctate al servidor comunitario de Ferchii con compatibilidad Bedrock y Java simultánea.",
+              playPageImage: { url: "" }
+            }
+          ];
+
+          return sendJson(res, 200, { success: true, news: finalNews });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, message: err.message });
+        }
+      }
+
+      // Endpoints del Gestor de Perfiles (Instancias Independientes)
+      if (pathname === '/api/profiles' && method === 'GET') {
+        const config = loadConfig();
+        return sendJson(res, 200, {
+          success: true,
+          profiles: config.profiles || [],
+          activeProfileId: config.activeProfileId || null
+        });
+      }
+
+      if (pathname === '/api/profiles' && method === 'POST') {
+        const body = await parseBody(req);
+        const config = loadConfig();
+        if (!config.profiles) config.profiles = [];
+
+        const defaultGameDir = require('./config').getDefaultGameDir();
+        const profileId = 'prof_' + Date.now();
+        const profileName = (body.name || 'Nuevo Perfil').trim().slice(0, 24);
+        const profileFolder = body.isolateFolder 
+          ? path.join(defaultGameDir, 'profiles', profileName.replace(/[^a-zA-Z0-9_-]/g, '_'))
+          : defaultGameDir;
+
+        if (body.isolateFolder && !fs.existsSync(profileFolder)) {
+          fs.mkdirSync(profileFolder, { recursive: true });
+        }
+
+        const newProfile = {
+          id: profileId,
+          name: profileName,
+          version: body.version || config.selectedVersion || '26.2',
+          gameDir: profileFolder,
+          ram: body.ram || config.ram || 4,
+          icon: body.icon || 'creeper',
+          createdAt: Date.now()
+        };
+
+        config.profiles.push(newProfile);
+        if (body.selectImmediately !== false) {
+          config.activeProfileId = newProfile.id;
+          config.gameDir = newProfile.gameDir;
+          config.selectedVersion = newProfile.version;
+          config.ram = newProfile.ram;
+        }
+        saveConfig(config);
+        return sendJson(res, 200, { success: true, profile: newProfile, config });
+      }
+
+      if (pathname === '/api/profiles/select' && method === 'POST') {
+        const body = await parseBody(req);
+        const config = loadConfig();
+        const found = (config.profiles || []).find(p => p.id === body.id);
+        if (found) {
+          config.activeProfileId = found.id;
+          config.gameDir = found.gameDir;
+          config.selectedVersion = found.version;
+          if (found.ram) config.ram = found.ram;
+          saveConfig(config);
+          return sendJson(res, 200, { success: true, config });
+        } else if (body.id === 'default') {
+          config.activeProfileId = null;
+          config.gameDir = require('./config').getDefaultGameDir();
+          saveConfig(config);
+          return sendJson(res, 200, { success: true, config });
+        }
+        return sendJson(res, 404, { success: false, message: 'Perfil no encontrado' });
+      }
+
+      if (pathname.startsWith('/api/profiles/') && method === 'DELETE') {
+        const profileId = pathname.replace('/api/profiles/', '');
+        const config = loadConfig();
+        if (config.profiles) {
+          config.profiles = config.profiles.filter(p => p.id !== profileId);
+        }
+        if (config.activeProfileId === profileId) {
+          config.activeProfileId = null;
+          config.gameDir = require('./config').getDefaultGameDir();
+        }
+        saveConfig(config);
+        return sendJson(res, 200, { success: true, config });
+      }
+
       // Endpoints de Mod Loaders (Fabric & Quilt)
       if (pathname === '/api/modloaders/fabric/games' && method === 'GET') {
         try {

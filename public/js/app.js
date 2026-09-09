@@ -1,6 +1,6 @@
 // --- Estado Global del Launcher ---
 let launcherConfig = null;
-let allVersions = [];
+let allVersions = []
 let localVersions = [];
 let activeFilter = 'all';
 let msPollingInterval = null;
@@ -8,6 +8,9 @@ let activeModsTab = 'mods';
 
 // --- Inicialización al Cargar el DOM ---
 document.addEventListener('DOMContentLoaded', async () => {
+  // 1. Splash screen primero
+  showSplash();
+
   setupWindowControls();
   setupNavigation();
   setupAccountHandlers();
@@ -16,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupModsHandlers();
   setupVersionsHandlers();
   setupInstallLoaderHandlers();
+  setupProfileHandlers();
   setupPlayHandler();
   setupUpdateHandlers();
   setupSSE();
@@ -23,6 +27,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadInitialConfig();
   await loadVersionsList();
   await loadModsList();
+  await loadProfilesList();
+
+  // 2. Particulas pixeladas en fondo
+  initPixelParticles();
+
+  // 3. Noticias Mojang en el home
+  loadMojangNews();
+
+  // 4. Ocultar splash cuando todo cargo
+  hideSplash();
 });
 
 
@@ -191,6 +205,11 @@ function applyCustomizationSettings() {
   const accent = launcherConfig.accentColor || '#00f0ff';
   root.style.setProperty('--accent-cyan', accent);
 
+  const customAccentPicker = document.getElementById('customAccentPicker');
+  const customColorHexText = document.getElementById('customColorHexText');
+  if (customAccentPicker) customAccentPicker.value = accent;
+  if (customColorHexText) customColorHexText.textContent = accent.toUpperCase();
+
   const themeBtns = document.querySelectorAll('.theme-preset-btn');
   themeBtns.forEach(btn => {
     if (btn.getAttribute('data-color') === accent || btn.getAttribute('data-preset') === launcherConfig.themePreset) {
@@ -230,6 +249,8 @@ function setupCustomizationHandlers() {
   const bgSlider = document.getElementById('bgOpacitySlider');
   const bgBadge = document.getElementById('bgOpacityBadge');
   const bgOverlay = document.getElementById('customBgOverlay');
+  const customAccentPicker = document.getElementById('customAccentPicker');
+  const customColorHexText = document.getElementById('customColorHexText');
 
   // Control en tiempo real de opacidad glass
   if (glassSlider) {
@@ -248,8 +269,20 @@ function setupCustomizationHandlers() {
 
       const color = btn.getAttribute('data-color');
       root.style.setProperty('--accent-cyan', color);
+      if (customAccentPicker) customAccentPicker.value = color;
+      if (customColorHexText) customColorHexText.textContent = color.toUpperCase();
     });
   });
+
+  // Selector de color libre en tiempo real
+  if (customAccentPicker) {
+    customAccentPicker.addEventListener('input', () => {
+      const color = customAccentPicker.value;
+      root.style.setProperty('--accent-cyan', color);
+      if (customColorHexText) customColorHexText.textContent = color.toUpperCase();
+      themeBtns.forEach(b => b.classList.remove('active'));
+    });
+  }
 
   // Control en tiempo real de fondo personalizado
   if (bgInput) {
@@ -316,14 +349,44 @@ function setupAccountHandlers() {
   offlineInput.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      const name = offlineInput.value.trim() || 'MHF_Steve';
-      offlineAvatarPreview.src = `https://mc-heads.net/avatar/${encodeURIComponent(name)}/80`;
-    }, 400);
+      const raw = offlineInput.value;
+      const clean = raw.trim().replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+      const hint = document.getElementById('offlineUsernameHint');
+
+      if (!clean) {
+        // Sin caracteres validos
+        offlineAvatarPreview.src = 'https://mc-heads.net/avatar/MHF_Steve/80';
+        if (raw.trim().length > 0) {
+          hint.style.display = 'block';
+          hint.style.color = '#ff6b6b';
+          hint.textContent = 'El nombre no tiene caracteres validos (solo letras, numeros y _).';
+          btnSubmitOffline.disabled = true;
+        } else {
+          hint.style.display = 'none';
+          btnSubmitOffline.disabled = false;
+        }
+      } else if (clean !== raw.trim()) {
+        // El nombre tiene caracteres que se eliminaran
+        hint.style.display = 'block';
+        hint.style.color = '#f0a500';
+        hint.textContent = `Se guardara como: "${clean}" (los espacios y simbolos se eliminan automaticamente).`;
+        offlineAvatarPreview.src = `https://mc-heads.net/avatar/${encodeURIComponent(clean)}/80`;
+        btnSubmitOffline.disabled = clean.length < 3;
+      } else {
+        hint.style.display = 'none';
+        offlineAvatarPreview.src = `https://mc-heads.net/avatar/${encodeURIComponent(clean)}/80`;
+        btnSubmitOffline.disabled = false;
+      }
+    }, 300);
   });
 
   btnSubmitOffline.addEventListener('click', async () => {
     const name = offlineInput.value.trim();
     if (!name) return;
+
+    const hint = document.getElementById('offlineUsernameHint');
+    btnSubmitOffline.disabled = true;
+    btnSubmitOffline.textContent = 'Guardando...';
 
     try {
       const res = await fetch('/api/accounts/offline', {
@@ -337,9 +400,24 @@ function setupAccountHandlers() {
         updateAccountUI();
         modalOffline.classList.remove('active');
         offlineInput.value = '';
+        if (hint) hint.style.display = 'none';
+      } else {
+        // Mostrar el error del servidor bajo el input
+        if (hint) {
+          hint.style.display = 'block';
+          hint.style.color = '#ff6b6b';
+          hint.textContent = data.message || 'Error al guardar la cuenta.';
+        }
       }
     } catch (e) {
-      alert('Error guardando cuenta: ' + e.message);
+      if (hint) {
+        hint.style.display = 'block';
+        hint.style.color = '#ff6b6b';
+        hint.textContent = 'Error de red: ' + e.message;
+      }
+    } finally {
+      btnSubmitOffline.disabled = false;
+      btnSubmitOffline.textContent = 'Guardar y Usar';
     }
   });
 
@@ -454,6 +532,8 @@ function updateAccountUI() {
     topAccountBadge.textContent = 'NO INICIADO';
     topAccountBadge.className = 'account-type-badge offline';
     homeStatMode.textContent = 'Sin Cuenta';
+    const homeStatPlayTime = document.getElementById('homeStatPlayTime');
+    if (homeStatPlayTime) homeStatPlayTime.textContent = '0h 0m';
 
     const list = document.getElementById('dropdownAccountsList');
     list.innerHTML = '<div style="padding: 10px; font-size: 11px; color: var(--text-dim); text-align: center;">No hay cuentas agregadas.<br>Haz clic abajo para crear una.</div>';
@@ -472,6 +552,14 @@ function updateAccountUI() {
     topAccountBadge.textContent = 'OFFLINE';
     topAccountBadge.className = 'account-type-badge offline';
     homeStatMode.textContent = 'No-Premium';
+  }
+
+  const homeStatPlayTime = document.getElementById('homeStatPlayTime');
+  if (homeStatPlayTime) {
+    const totalSec = currentAcc.playTimeSeconds || 0;
+    const hours = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    homeStatPlayTime.textContent = totalSec < 60 ? `${totalSec}s` : `${hours}h ${mins}m`;
   }
 
   const list = document.getElementById('dropdownAccountsList');
@@ -558,8 +646,8 @@ function setupSettingsHandlers() {
       jvmArgs: document.getElementById('jvmArgsInput').value.trim(),
       // Personalización
       glassOpacity: parseInt(document.getElementById('glassOpacitySlider').value, 10),
-      accentColor: activeThemeBtn ? activeThemeBtn.getAttribute('data-color') : '#00f0ff',
-      themePreset: activeThemeBtn ? activeThemeBtn.getAttribute('data-preset') : 'cyan',
+      accentColor: (document.getElementById('customAccentPicker') && document.getElementById('customAccentPicker').value) || (activeThemeBtn ? activeThemeBtn.getAttribute('data-color') : '#00f0ff'),
+      themePreset: activeThemeBtn ? activeThemeBtn.getAttribute('data-preset') : 'custom',
       bgImage: document.getElementById('bgImageInput').value.trim(),
       bgImageOpacity: parseInt(document.getElementById('bgOpacitySlider').value, 10)
     };
@@ -1446,3 +1534,363 @@ function setupSSE() {
 
   evtSource.onerror = () => {};
 }
+
+// ========================================================
+// 1. PANTALLA DE CARGA (SPLASH SCREEN)
+// ========================================================
+function showSplash() {
+  const splash = document.getElementById('splashScreen');
+  if (splash) {
+    splash.classList.remove('fade-out');
+  }
+}
+
+function hideSplash() {
+  const splash = document.getElementById('splashScreen');
+  const statusText = document.getElementById('splashStatusText');
+  if (statusText) statusText.textContent = 'Entorno cargado';
+  if (splash) {
+    setTimeout(() => {
+      splash.classList.add('fade-out');
+      setTimeout(() => {
+        splash.style.display = 'none';
+      }, 550);
+    }, 450);
+  }
+}
+
+// ========================================================
+// 2. PARTÍCULAS PIXELADAS MINECRAFT EN EL FONDO
+// ========================================================
+function initPixelParticles() {
+  const canvas = document.getElementById('pixelCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const PARTICLE_COUNT = 30;
+  const particles = [];
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      size: Math.floor(Math.random() * 4) + 2,
+      speedY: -(Math.random() * 0.4 + 0.12),
+      speedX: (Math.random() - 0.5) * 0.2,
+      opacity: Math.random() * 0.45 + 0.15,
+      opacityDelta: (Math.random() * 0.007 + 0.002) * (Math.random() > 0.5 ? 1 : -1)
+    });
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const style = getComputedStyle(document.documentElement);
+    const accentColor = style.getPropertyValue('--accent-cyan').trim() || '#00f0ff';
+
+    for (let p of particles) {
+      p.y += p.speedY;
+      p.x += p.speedX;
+      p.opacity += p.opacityDelta;
+
+      if (p.opacity > 0.6 || p.opacity < 0.1) {
+        p.opacityDelta = -p.opacityDelta;
+      }
+
+      if (p.y < -10) {
+        p.y = canvas.height + 10;
+        p.x = Math.random() * canvas.width;
+      }
+      if (p.x < -10) p.x = canvas.width + 10;
+      if (p.x > canvas.width + 10) p.x = -10;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.05, Math.min(1, p.opacity));
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+      ctx.restore();
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ========================================================
+// 3. NOVEDADES Y NOTICIAS DE MOJANG
+// ========================================================
+async function loadMojangNews() {
+  const container = document.getElementById('newsCardsGrid');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/news');
+    const data = await res.json();
+
+    if (data.success && Array.isArray(data.news) && data.news.length > 0) {
+      container.innerHTML = '';
+      data.news.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'news-card';
+
+        let imgUrl = '';
+        if (item.playPageImage && item.playPageImage.url) {
+          imgUrl = item.playPageImage.url;
+        } else if (item.newsPageImage && item.newsPageImage.url) {
+          imgUrl = item.newsPageImage.url;
+        }
+
+        const tag = item.tag || item.category || 'Novedad';
+        const title = item.title || 'Actualización de Minecraft';
+        const desc = item.text || 'Consulta los detalles de esta actualización oficial de Minecraft.';
+        const readUrl = item.readMoreUrl || item.cardPath || 'https://www.minecraft.net';
+
+        card.innerHTML = `
+          <div class="news-card-thumb" style="${imgUrl ? `background-image: url('${imgUrl}')` : 'background: linear-gradient(135deg, #1e293b, #0f172a);'}">
+            <span class="news-card-tag-pill">${tag}</span>
+          </div>
+          <div class="news-card-body">
+            <h4 class="news-card-title">${title}</h4>
+            <p class="news-card-desc">${desc}</p>
+            <div class="news-card-footer">
+              <span>Leer artículo</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage('openUrl:' + readUrl);
+          } else {
+            window.open(readUrl, '_blank');
+          }
+        });
+
+        container.appendChild(card);
+      });
+    } else {
+      container.innerHTML = '<div class="news-card-skeleton">No se pudieron cargar noticias en este momento.</div>';
+    }
+  } catch (err) {
+    container.innerHTML = '<div class="news-card-skeleton">Modo sin conexión. Noticias no disponibles.</div>';
+  }
+}
+
+// ========================================================
+// 4. GESTOR DE PERFILES E INSTANCIAS
+// ========================================================
+function setupProfileHandlers() {
+  const btnManage = document.getElementById('btnManageProfiles');
+  const modal = document.getElementById('modalProfiles');
+  const btnClose = document.getElementById('btnCloseProfilesModal');
+  const btnCancel = document.getElementById('btnCancelProfiles');
+  const btnSubmit = document.getElementById('btnCreateProfileSubmit');
+
+  if (btnManage) {
+    btnManage.addEventListener('click', () => {
+      populateProfileVersionSelect();
+      loadProfilesList();
+      if (modal) modal.classList.add('active');
+    });
+  }
+
+  if (btnClose) btnClose.addEventListener('click', () => modal && modal.classList.remove('active'));
+  if (btnCancel) btnCancel.addEventListener('click', () => modal && modal.classList.remove('active'));
+
+  if (btnSubmit) {
+    btnSubmit.addEventListener('click', async () => {
+      const nameInput = document.getElementById('newProfileNameInput');
+      const verSelect = document.getElementById('newProfileVersionSelect');
+      const ramInput = document.getElementById('newProfileRamInput');
+      const isolateCheck = document.getElementById('newProfileIsolateCheckbox');
+
+      const name = (nameInput.value || '').trim();
+      if (!name) {
+        alert('Por favor introduce un nombre para el perfil.');
+        return;
+      }
+
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = 'Creando...';
+
+      try {
+        const res = await fetch('/api/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            version: verSelect ? verSelect.value : launcherConfig.selectedVersion,
+            ram: parseInt(ramInput.value, 10) || 4,
+            isolateFolder: isolateCheck ? isolateCheck.checked : true,
+            selectImmediately: true
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          launcherConfig = data.config;
+          updateUIFromConfig();
+          nameInput.value = '';
+          await loadProfilesList();
+          if (modal) modal.classList.remove('active');
+        } else {
+          alert('Error creando perfil: ' + (data.message || 'Error desconocido'));
+        }
+      } catch (err) {
+        alert('Error de conexión al crear perfil: ' + err.message);
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Crear y Usar Perfil';
+      }
+    });
+  }
+}
+
+function populateProfileVersionSelect() {
+  const select = document.getElementById('newProfileVersionSelect');
+  if (!select) return;
+  select.innerHTML = '';
+
+  const opts = [];
+  if (localVersions && localVersions.length > 0) {
+    opts.push(...localVersions.map(v => ({ id: v.id, label: `${v.id} (Instalada)` })));
+  }
+  if (allVersions && allVersions.length > 0) {
+    allVersions.slice(0, 15).forEach(v => {
+      if (!opts.some(o => o.id === v.id)) {
+        opts.push({ id: v.id, label: `${v.id} (${v.type || 'oficial'})` });
+      }
+    });
+  }
+
+  if (opts.length === 0) {
+    opts.push({ id: '26.2', label: '26.2 (Recomendada)' });
+  }
+
+  opts.forEach(opt => {
+    const el = document.createElement('option');
+    el.value = opt.id;
+    el.textContent = opt.label;
+    if (launcherConfig && launcherConfig.selectedVersion === opt.id) {
+      el.selected = true;
+    }
+    select.appendChild(el);
+  });
+}
+
+async function loadProfilesList() {
+  const container = document.getElementById('profilesListContainer');
+  const activeLabel = document.getElementById('activeProfileNameLabel');
+
+  try {
+    const res = await fetch('/api/profiles');
+    const data = await res.json();
+
+    if (!data.success) return;
+    const profiles = data.profiles || [];
+    const activeId = data.activeProfileId;
+
+    if (activeLabel) {
+      const activeProf = profiles.find(p => p.id === activeId);
+      activeLabel.textContent = activeProf ? `${activeProf.name} (${activeProf.version})` : 'Predeterminado (Global)';
+    }
+
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Perfil Default
+    const isDefActive = !activeId;
+    const defCard = document.createElement('div');
+    defCard.className = `profile-entry-card ${isDefActive ? 'active' : ''}`;
+    defCard.innerHTML = `
+      <div class="profile-entry-left">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan);">
+          <polygon points="12 2 2 7 12 12 22 7 12 12"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+        <div>
+          <div class="profile-entry-name">Predeterminado (Global)</div>
+          <div class="profile-entry-details">Directorio estándar .minecraft</div>
+        </div>
+      </div>
+      <div class="profile-entry-actions">
+        ${isDefActive ? '<span style="font-size: 11px; font-weight: 700; color: var(--accent-cyan);">ACTIVO</span>' : '<button class="btn-secondary btn-sm" id="btnSelectDefProf">Activar</button>'}
+      </div>
+    `;
+
+    const selectDefBtn = defCard.querySelector('#btnSelectDefProf');
+    if (selectDefBtn) {
+      selectDefBtn.addEventListener('click', async () => {
+        await fetch('/api/profiles/select', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: 'default' })
+        });
+        await loadInitialConfig();
+        await loadProfilesList();
+      });
+    }
+    container.appendChild(defCard);
+
+    // Perfiles Custom
+    profiles.forEach(prof => {
+      const isAct = prof.id === activeId;
+      const card = document.createElement('div');
+      card.className = `profile-entry-card ${isAct ? 'active' : ''}`;
+      card.innerHTML = `
+        <div class="profile-entry-left">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: ${isAct ? 'var(--accent-cyan)' : 'var(--text-dim)'};">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <div>
+            <div class="profile-entry-name">${prof.name}</div>
+            <div class="profile-entry-details">Versión: ${prof.version} | RAM: ${prof.ram} GB</div>
+          </div>
+        </div>
+        <div class="profile-entry-actions">
+          ${isAct ? '<span style="font-size: 11px; font-weight: 700; color: var(--accent-cyan);">ACTIVO</span>' : `<button class="btn-secondary btn-sm" data-select="${prof.id}">Activar</button>`}
+          <button class="btn-secondary btn-sm" data-delete="${prof.id}" style="color: #ef4444;" title="Eliminar perfil">&times;</button>
+        </div>
+      `;
+
+      const selBtn = card.querySelector(`[data-select="${prof.id}"]`);
+      if (selBtn) {
+        selBtn.addEventListener('click', async () => {
+          await fetch('/api/profiles/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: prof.id })
+          });
+          await loadInitialConfig();
+          await loadProfilesList();
+        });
+      }
+
+      const delBtn = card.querySelector(`[data-delete="${prof.id}"]`);
+      if (delBtn) {
+        delBtn.addEventListener('click', async () => {
+          if (!confirm(`¿Eliminar perfil "${prof.name}"?`)) return;
+          await fetch(`/api/profiles/${prof.id}`, { method: 'DELETE' });
+          await loadInitialConfig();
+          await loadProfilesList();
+        });
+      }
+
+      container.appendChild(card);
+    });
+  } catch (e) {}
+}
+

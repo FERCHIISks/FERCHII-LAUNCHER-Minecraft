@@ -20,9 +20,14 @@ function generateOfflineUUID(username) {
 }
 
 function createOfflineAccount(username) {
-  const cleanName = username.trim().replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+  // Eliminar espacios al inicio/fin, luego quitar todo lo que no sea alfanumerico o guion bajo
+  const trimmed = username.trim();
+  const cleanName = trimmed.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
   if (!cleanName) {
-    throw new Error('El nombre de usuario solo puede contener letras, números y guiones bajos.');
+    throw new Error('El nombre de usuario solo puede contener letras, numeros y guiones bajos. No uses espacios ni simbolos.');
+  }
+  if (cleanName.length < 3) {
+    throw new Error('El nombre de usuario debe tener al menos 3 caracteres validos (letras, numeros o _).');
   }
   const uuid = generateOfflineUUID(cleanName);
   return {
@@ -30,6 +35,7 @@ function createOfflineAccount(username) {
     type: 'offline',
     username: cleanName,
     uuid: uuid,
+    // Usar el nombre limpio para el avatar
     avatarUrl: `https://mc-heads.net/avatar/${cleanName}/100`,
     createdAt: Date.now()
   };
