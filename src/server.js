@@ -161,7 +161,7 @@ const server = http.createServer(async (req, res) => {
           const https = require('https');
           const newsData = await new Promise((resolve) => {
             const req = https.get('https://launchercontent.mojang.com/news.json', {
-              headers: { 'User-Agent': 'Ferchii-Launcher/3.4' }
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
             }, (res) => {
               let d = '';
               res.on('data', chunk => d += chunk);
@@ -181,20 +181,43 @@ const server = http.createServer(async (req, res) => {
             });
           });
 
-          const finalNews = (newsData && newsData.length > 0) ? newsData.slice(0, 6) : [
+          const fallbackImages = [
+            'https://launchercontent.mojang.com/images/4bBqdKap4YSe87kbAvlyzz-MinecraftEducationPlanetEarth3Launcher772x350.jpeg',
+            'https://launchercontent.mojang.com/images/Vpwr1WhNMueVhvRNbCSZH-MinecraftEducationPlanetEarth3Launcher700x466.jpeg',
+            'https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=800&q=80'
+          ];
+
+          const finalNews = (newsData && newsData.length > 0) ? newsData.slice(0, 8).map((item, idx) => {
+            let img = '';
+            if (item.newsPageImage && item.newsPageImage.url) {
+              img = item.newsPageImage.url.startsWith('http') ? item.newsPageImage.url : 'https://launchercontent.mojang.com' + item.newsPageImage.url;
+            } else if (item.playPageImage && item.playPageImage.url) {
+              img = item.playPageImage.url.startsWith('http') ? item.playPageImage.url : 'https://launchercontent.mojang.com' + item.playPageImage.url;
+            } else {
+              img = fallbackImages[idx % fallbackImages.length];
+            }
+            return {
+              ...item,
+              imageUrl: img,
+              readMoreUrl: item.readMoreLink || item.cardPath || 'https://www.minecraft.net'
+            };
+          }) : [
             {
-              title: "Minecraft Java Edition: Novedades y Actualizaciones",
+              title: "Minecraft Java Edition: Novedades",
               tag: "Oficial",
               category: "Java Edition",
-              text: "Descubre las últimas mejoras, snapshots y cambios de rendimiento para la versión Java Edition.",
-              playPageImage: { url: "" }
+              text: "Descubre las últimas mejoras, snapshots y novedades oficiales para Java Edition.",
+              imageUrl: fallbackImages[0],
+              readMoreUrl: "https://www.minecraft.net"
             },
             {
-              title: "Servidor INGENIEROSMC Compatible",
+              title: "Servidor Comunitario INGENIEROSMC",
               tag: "Comunidad",
-              category: "Crossplay",
-              text: "Conéctate al servidor comunitario de Ferchii con compatibilidad Bedrock y Java simultánea.",
-              playPageImage: { url: "" }
+              category: "Servidor",
+              text: "Únete a la comunidad de Ferchii en nuestro servidor crossplay Java y Bedrock.",
+              imageUrl: fallbackImages[2],
+              readMoreUrl: "https://www.minecraft.net"
             }
           ];
 

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 
-const CURRENT_VERSION = '3.4.0';
+const CURRENT_VERSION = '3.5.0';
 const GITHUB_REPO = 'FERCHIISks/FERCHII-LAUNCHER-Minecraft';
 
 let cachedUpdateInfo = null;

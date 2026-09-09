@@ -1641,11 +1641,16 @@ async function loadMojangNews() {
         const card = document.createElement('div');
         card.className = 'news-card';
 
-        let imgUrl = '';
-        if (item.playPageImage && item.playPageImage.url) {
-          imgUrl = item.playPageImage.url;
-        } else if (item.newsPageImage && item.newsPageImage.url) {
-          imgUrl = item.newsPageImage.url;
+        let imgUrl = item.imageUrl || '';
+        if (!imgUrl) {
+          if (item.newsPageImage && item.newsPageImage.url) {
+            imgUrl = item.newsPageImage.url.startsWith('http') ? item.newsPageImage.url : 'https://launchercontent.mojang.com' + item.newsPageImage.url;
+          } else if (item.playPageImage && item.playPageImage.url) {
+            imgUrl = item.playPageImage.url.startsWith('http') ? item.playPageImage.url : 'https://launchercontent.mojang.com' + item.playPageImage.url;
+          }
+        }
+        if (!imgUrl) {
+          imgUrl = 'https://launchercontent.mojang.com/images/4bBqdKap4YSe87kbAvlyzz-MinecraftEducationPlanetEarth3Launcher772x350.jpeg';
         }
 
         const tag = item.tag || item.category || 'Novedad';
