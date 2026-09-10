@@ -35,7 +35,7 @@ Por ahora este programa no esta pensado para publicarse de forma abierta a todo 
 
 Para que no tengas que instalar librerias ni configurar nada raro, aqui tienes el paquete listo para descomprimir y jugar:
 
-- Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER v3.6.3](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.6.3/Ferchii_Launcher_v3.6.3-Full.zip)
+- Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER v3.6.4](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.6.4/Ferchii_Launcher_v3.6.4-Full.zip)
 
 (Nota: Sube el archivo comprimido a tu servicio de almacenamiento preferido como Google Drive, OneDrive, MediaFire o a los Releases de GitHub y coloca el enlace aqui).
 
