@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec, execFile, spawn } = require('child_process');
 
-const CURRENT_VERSION = '3.6.1';
+const CURRENT_VERSION = '3.6.2';
 const GITHUB_REPO = 'FERCHIISks/FERCHII-LAUNCHER-Minecraft';
 const APP_EXE_NAME = 'Launcher.exe';
 
@@ -157,7 +157,13 @@ function isTrustedDownloadUrl(rawUrl) {
     return false;
   }
   if (parsed.protocol !== 'https:') return false;
-  if (!ALLOWED_DOWNLOAD_HOSTS.includes(parsed.hostname.toLowerCase())) return false;
+  const hostname = parsed.hostname.toLowerCase();
+  if (!ALLOWED_DOWNLOAD_HOSTS.includes(hostname)) return false;
+  // GitHub redirige los enlaces de release a una URL firmada en estos hosts.
+  // La ruta cambia y no incluye necesariamente el nombre del repositorio.
+  if (hostname === 'release-assets.githubusercontent.com' || hostname === 'objects.githubusercontent.com') {
+    return true;
+  }
   // La ruta debe pertenecer a las releases de este repositorio.
   return parsed.pathname.toLowerCase().includes(`/${GITHUB_REPO.toLowerCase()}/releases/`);
 }
