@@ -22,7 +22,13 @@ for _ in $(seq 1 40); do
   sleep 0.15
 done
 
-if command -v xdg-open >/dev/null 2>&1; then
+if command -v chromium >/dev/null 2>&1; then
+  chromium --app="$URL" >/dev/null 2>&1 &
+elif command -v chromium-browser >/dev/null 2>&1; then
+  chromium-browser --app="$URL" >/dev/null 2>&1 &
+elif command -v google-chrome >/dev/null 2>&1; then
+  google-chrome --app="$URL" >/dev/null 2>&1 &
+elif command -v xdg-open >/dev/null 2>&1; then
   xdg-open "$URL" >/dev/null 2>&1 &
 elif command -v sensible-browser >/dev/null 2>&1; then
   sensible-browser "$URL" >/dev/null 2>&1 &
