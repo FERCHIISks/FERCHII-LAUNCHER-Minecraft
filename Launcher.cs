@@ -57,6 +57,12 @@ namespace FerchiiLauncher
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(10, 14, 24);
 
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "public", "assets", "ferchii-logo.ico");
+            if (File.Exists(iconPath))
+            {
+                try { this.Icon = new Icon(iconPath); } catch { }
+            }
+
             ApplyWindowRounding();
 
             StartBackendServer();

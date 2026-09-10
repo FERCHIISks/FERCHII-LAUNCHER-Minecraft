@@ -7,6 +7,58 @@ let localVersions = [];
 let activeFilter = 'all';
 let msPollingInterval = null;
 let activeModsTab = 'mods';
+let uiAudioContext = null;
+let lastUiSoundAt = 0;
+
+// Sonidos sintéticos locales: no requieren descargas ni archivos externos.
+function playUiSound(kind = 'click') {
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) return;
+
+  const now = performance.now();
+  if (now - lastUiSoundAt < 45) return;
+  lastUiSoundAt = now;
+
+  try {
+    if (!uiAudioContext) uiAudioContext = new AudioCtor();
+    if (uiAudioContext.state === 'suspended') uiAudioContext.resume();
+
+    const oscillator = uiAudioContext.createOscillator();
+    const gain = uiAudioContext.createGain();
+    const start = uiAudioContext.currentTime;
+    const tones = {
+      click: [420, 0.055, 'sine'],
+      nav: [560, 0.065, 'triangle'],
+      action: [680, 0.1, 'triangle'],
+      close: [240, 0.08, 'sine']
+    };
+    const [frequency, duration, wave] = tones[kind] || tones.click;
+
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.18, start + duration);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.045, start + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(gain);
+    gain.connect(uiAudioContext.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.015);
+  } catch (err) {}
+}
+
+function setupUiSounds() {
+  document.addEventListener('pointerdown', (event) => {
+    const target = event.target.closest('button, [role="button"], .account-selector, .update-indicator-badge, .version-dropdown-trigger');
+    if (!target || target.disabled || target.dataset.silentSound === 'true') return;
+
+    let kind = 'click';
+    if (target.classList.contains('nav-item')) kind = 'nav';
+    if (target.id === 'btnPlay' || target.id === 'btnStartUpdate' || target.classList.contains('btn-primary')) kind = 'action';
+    if (target.id === 'btnWinClose' || target.classList.contains('modal-close')) kind = 'close';
+    playUiSound(kind);
+  });
+}
 
 // --- Inicialización al Cargar el DOM ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -25,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPlayHandler();
   setupUpdateHandlers();
   setupUpdateSettingsHandlers();
+  setupUiSounds();
   setupSSE();
 
   await loadInitialConfig();
