@@ -39,7 +39,8 @@ function getDefaultConfig() {
     accentColor: '#00f0ff',
     themePreset: 'cyan',
     bgImage: '',
-    bgImageOpacity: 45
+    bgImageOpacity: 45,
+    visualEffects: true
   };
 }
 

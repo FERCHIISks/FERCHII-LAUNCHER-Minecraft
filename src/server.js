@@ -19,6 +19,13 @@ const {
 const gameLauncher = require('./gameLauncher');
 const updater = require('./updater');
 
+// Si quedaron archivos temporales de una actualización anterior, los limpiamos.
+updater.cleanupUpdateTemp();
+
+// Si encontramos la marca de actualización, es que el launcher acaba de
+// actualizarse: lo avisamos en la interfaz con el resultado real.
+const lastUpdateMarker = updater.consumeUpdateMarker();
+
 
 const PORT = 38491;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -37,6 +44,9 @@ const MIME_TYPES = {
 };
 
 const sseClients = [];
+
+// Evita lanzar dos actualizaciones a la vez.
+let updateInProgress = false;
 
 function broadcastSSE(type, data) {
   const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -123,7 +133,12 @@ const server = http.createServer(async (req, res) => {
     try {
       if (pathname === '/api/config' && method === 'GET') {
         const config = loadConfig();
-        return sendJson(res, 200, { success: true, config, totalSystemRam: getTotalSystemRAMGB() });
+        return sendJson(res, 200, {
+          success: true,
+          config,
+          totalSystemRam: getTotalSystemRAMGB(),
+          launcherVersion: updater.CURRENT_VERSION
+        });
       }
 
       if (pathname === '/api/config' && method === 'POST') {
@@ -503,19 +518,53 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { success: true, update: updateInfo });
       }
 
-      if (pathname === '/api/updates/apply' && method === 'POST') {
-        const body = await parseBody(req);
-        const downloadUrl = body.downloadUrl;
-        if (!downloadUrl) {
-          return sendJson(res, 400, { success: false, message: 'URL de descarga no proporcionada' });
-        }
+      if (pathname === '/api/updates/log' && method === 'GET') {
+        const logInfo = updater.readUpdateLog();
+        return sendJson(res, 200, {
+          success: true,
+          exists: logInfo.exists,
+          status: logInfo.status,
+          log: logInfo.log
+        });
+      }
 
-        // Ejecutar actualización reportando por SSE
-        updater.applyUpdate(downloadUrl, (message, progress) => {
+      if (pathname === '/api/updates/last-result' && method === 'GET') {
+        const logInfo = updater.readUpdateLog();
+        return sendJson(res, 200, {
+          success: true,
+          justUpdated: !!lastUpdateMarker.pending,
+          updatedTo: lastUpdateMarker.version || '',
+          status: logInfo.status,
+          log: logInfo.log
+        });
+      }
+
+      if (pathname === '/api/updates/apply' && method === 'POST') {
+        await parseBody(req).catch(() => ({}));
+
+        if (updateInProgress) {
+          return sendJson(res, 200, { success: false, message: 'Ya hay una actualización en curso.' });
+        }
+        updateInProgress = true;
+
+        // La URL de descarga la resuelve el propio servidor contra GitHub:
+        // el cliente no puede indicar de dónde bajar el paquete.
+        updater.applyUpdate((message, progress) => {
           broadcastSSE('updateProgress', { message, progress });
         }).then((result) => {
-          broadcastSSE('updateProgress', { message: 'Actualización finalizada con éxito.', progress: 100, done: true });
+          broadcastSSE('updateProgress', {
+            message: 'Instalación lista. Reiniciando el launcher para aplicarla...',
+            progress: 100,
+            done: true,
+            restarting: !!result.restartRequired
+          });
+
+          // Damos tiempo a que la interfaz reciba el aviso antes de apagar Node.
+          // El script de actualización se encarga de cerrar Launcher.exe,
+          // reemplazar los archivos y volver a abrirlo.
+          setTimeout(() => process.exit(0), 2000);
         }).catch((err) => {
+          updateInProgress = false;
           broadcastSSE('updateProgress', { message: 'Error: ' + err.message, progress: 0, error: true });
         });
 

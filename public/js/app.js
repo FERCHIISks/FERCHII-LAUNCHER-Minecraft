@@ -1,5 +1,7 @@
 // --- Estado Global del Launcher ---
 let launcherConfig = null;
+let launcherVersion = '';
+let sessionStartTime = Date.now();
 let allVersions = []
 let localVersions = [];
 let activeFilter = 'all';
@@ -22,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupProfileHandlers();
   setupPlayHandler();
   setupUpdateHandlers();
+  setupUpdateSettingsHandlers();
   setupSSE();
 
   await loadInitialConfig();
@@ -29,13 +32,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadModsList();
   await loadProfilesList();
 
-  // 2. Particulas pixeladas en fondo
+  // 2. Elementos "vivos": partículas, bloques flotantes y reloj de sesión
   initPixelParticles();
+  initFloatingBlocks();
+  startSessionClock();
 
   // 3. Noticias Mojang en el home
   loadMojangNews();
 
-  // 4. Ocultar splash cuando todo cargo
+  // 4. ¿Venimos de una actualización? Mostrarlo
+  checkLastUpdateResult();
+
+  // 5. Ocultar splash cuando todo cargo
   hideSplash();
 });
 
@@ -139,12 +147,42 @@ async function loadInitialConfig() {
     const data = await res.json();
     if (data.success) {
       launcherConfig = data.config;
+      if (data.launcherVersion) {
+        launcherVersion = data.launcherVersion;
+      }
+      updateVersionLabels();
       updateUIFromConfig(data.totalSystemRam);
       applyCustomizationSettings();
     }
   } catch (err) {
     console.error('Error cargando configuración:', err);
   }
+}
+
+// --- Versión instalada ---
+function updateVersionLabels() {
+  const label = launcherVersion ? `v${launcherVersion}` : 'v?';
+  const sidebarVersion = document.getElementById('sidebarVersion');
+  const settingsBadge = document.getElementById('settingsVersionBadge');
+  if (sidebarVersion) sidebarVersion.textContent = label;
+  if (settingsBadge) settingsBadge.textContent = label;
+}
+
+// --- Reloj de sesión (hace que el launcher se sienta vivo) ---
+function startSessionClock() {
+  const text = document.getElementById('sidebarUptimeText');
+  if (!text) return;
+
+  const tick = () => {
+    const totalSec = Math.floor((Date.now() - sessionStartTime) / 1000);
+    const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+    const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    text.textContent = `${h}:${m}:${s}`;
+  };
+
+  tick();
+  setInterval(tick, 1000);
 }
 
 function updateUIFromConfig(totalSystemRam) {
@@ -164,6 +202,7 @@ function updateUIFromConfig(totalSystemRam) {
   ramMaxMarker.textContent = `${maxRam} GB (Total PC)`;
   sidebarRamLabel.textContent = `RAM: ${ramSlider.value} GB asignados`;
   homeStatRam.textContent = `${ramSlider.value} GB`;
+  pulseStat(homeStatRam);
 
   // Resolución y pantalla
   document.getElementById('windowWidthInput').value = launcherConfig.windowWidth || 1280;
@@ -238,6 +277,15 @@ function applyCustomizationSettings() {
       bgOverlay.style.backgroundImage = 'none';
     }
   }
+
+  // 4. Efectos visuales y animaciones
+  applyVisualEffectsSetting(launcherConfig.visualEffects !== false);
+}
+
+function applyVisualEffectsSetting(enabled) {
+  document.body.classList.toggle('fx-off', !enabled);
+  const toggle = document.getElementById('visualFxToggle');
+  if (toggle) toggle.checked = enabled;
 }
 
 function setupCustomizationHandlers() {
@@ -301,6 +349,19 @@ function setupCustomizationHandlers() {
       const val = bgSlider.value;
       bgBadge.textContent = `${val}%`;
       bgOverlay.style.opacity = String(val / 100);
+    });
+  }
+
+  // Interruptor de efectos visuales (se aplica al instante)
+  const fxToggle = document.getElementById('visualFxToggle');
+  if (fxToggle) {
+    fxToggle.addEventListener('change', () => {
+      applyVisualEffectsSetting(fxToggle.checked);
+      showToast(
+        fxToggle.checked ? 'Efectos visuales activados' : 'Efectos visuales desactivados',
+        fxToggle.checked ? 'Disfruta del fondo animado y las transiciones.' : 'Modo de consumo mínimo activado.',
+        'info'
+      );
     });
   }
 }
@@ -557,9 +618,10 @@ function updateAccountUI() {
   const homeStatPlayTime = document.getElementById('homeStatPlayTime');
   if (homeStatPlayTime) {
     const totalSec = currentAcc.playTimeSeconds || 0;
-    const hours = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    homeStatPlayTime.textContent = totalSec < 60 ? `${totalSec}s` : `${hours}h ${mins}m`;
+    animateCounter(homeStatPlayTime, totalSec, (sec) => {
+      if (sec < 60) return `${sec}s`;
+      return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+    });
   }
 
   const list = document.getElementById('dropdownAccountsList');
@@ -649,7 +711,8 @@ function setupSettingsHandlers() {
       accentColor: (document.getElementById('customAccentPicker') && document.getElementById('customAccentPicker').value) || (activeThemeBtn ? activeThemeBtn.getAttribute('data-color') : '#00f0ff'),
       themePreset: activeThemeBtn ? activeThemeBtn.getAttribute('data-preset') : 'custom',
       bgImage: document.getElementById('bgImageInput').value.trim(),
-      bgImageOpacity: parseInt(document.getElementById('bgOpacitySlider').value, 10)
+      bgImageOpacity: parseInt(document.getElementById('bgOpacitySlider').value, 10),
+      visualEffects: document.getElementById('visualFxToggle') ? document.getElementById('visualFxToggle').checked : true
     };
 
     try {
@@ -1366,9 +1429,6 @@ function setupUpdateHandlers() {
   const btnPostpone = document.getElementById('btnPostponeUpdate');
   const btnStartUpdate = document.getElementById('btnStartUpdate');
   const btnStartUpdateText = document.getElementById('btnStartUpdateText');
-  const curVerSpan = document.getElementById('updateCurrentVer');
-  const newVerSpan = document.getElementById('updateNewVer');
-  const changelogBox = document.getElementById('updateChangelogBox');
   const progressContainer = document.getElementById('updateProgressContainer');
   const progressStatusText = document.getElementById('updateProgressStatusText');
   const progressPercentText = document.getElementById('updateProgressPercentText');
@@ -1391,7 +1451,15 @@ function setupUpdateHandlers() {
 
   if (btnStartUpdate) {
     btnStartUpdate.addEventListener('click', async () => {
-      if (!currentAvailableUpdate || !currentAvailableUpdate.downloadUrl) return;
+      if (!currentAvailableUpdate) return;
+      if (!currentAvailableUpdate.downloadUrl) {
+        showToast(
+          'Actualización no instalable automáticamente',
+          'La release no incluye un archivo .zip. Sube el paquete del launcher a la release de GitHub.',
+          'error'
+        );
+        return;
+      }
 
       try {
         btnStartUpdate.disabled = true;
@@ -1427,24 +1495,146 @@ function setupUpdateHandlers() {
     try {
       const res = await fetch('/api/updates/check');
       const data = await res.json();
-      if (data.success && data.update && data.update.hasUpdate) {
-        currentAvailableUpdate = data.update;
-        if (topbarBadge && topbarText) {
-          topbarText.textContent = `v${data.update.latestVersion} Disponible`;
-          topbarBadge.style.display = 'flex';
-        }
-        if (curVerSpan) curVerSpan.textContent = data.update.currentVersion;
-        if (newVerSpan) newVerSpan.textContent = data.update.latestVersion;
-        if (changelogBox) changelogBox.textContent = data.update.releaseNotes || 'Mejoras y correcciones generales.';
-
-        // Mostrar modal amigable automáticamente una vez por sesión
-        if (!sessionStorage.getItem('update_notified_' + data.update.latestVersion)) {
-          sessionStorage.setItem('update_notified_' + data.update.latestVersion, 'true');
-          modalUpdate.classList.add('active');
-        }
-      }
+      if (data.success) renderUpdateInfo(data.update, true);
     } catch (e) {}
   }, 2500);
+}
+
+// Vuelca la información de la última release de GitHub en la interfaz.
+function renderUpdateInfo(update, autoPrompt) {
+  if (!update) return false;
+
+  if (!launcherVersion && update.currentVersion) {
+    launcherVersion = update.currentVersion;
+    updateVersionLabels();
+  }
+
+  const topbarBadge = document.getElementById('topbarUpdateBadge');
+  const topbarText = document.getElementById('topbarUpdateText');
+  const curVerSpan = document.getElementById('updateCurrentVer');
+  const newVerSpan = document.getElementById('updateNewVer');
+  const changelogBox = document.getElementById('updateChangelogBox');
+
+  if (curVerSpan) curVerSpan.textContent = update.currentVersion;
+  if (newVerSpan) newVerSpan.textContent = update.latestVersion;
+  if (changelogBox) changelogBox.textContent = update.releaseNotes || 'Mejoras y correcciones generales.';
+
+  if (!update.hasUpdate) {
+    currentAvailableUpdate = null;
+    if (topbarBadge) topbarBadge.style.display = 'none';
+    return false;
+  }
+
+  currentAvailableUpdate = update;
+  if (topbarBadge && topbarText) {
+    topbarText.textContent = `v${update.latestVersion} Disponible`;
+    topbarBadge.style.display = 'flex';
+  }
+
+  // Mostrar el modal automáticamente una sola vez por sesión
+  if (autoPrompt && !sessionStorage.getItem('update_notified_' + update.latestVersion)) {
+    sessionStorage.setItem('update_notified_' + update.latestVersion, 'true');
+    const modalUpdate = document.getElementById('modalUpdate');
+    if (modalUpdate) modalUpdate.classList.add('active');
+  }
+
+  return true;
+}
+
+// Botón "Buscar actualizaciones" de la pantalla de Ajustes.
+function setupUpdateSettingsHandlers() {
+  const btn = document.getElementById('btnCheckUpdates');
+  const status = document.getElementById('updateCheckStatus');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    if (status) {
+      status.className = 'update-check-status';
+      status.textContent = 'Comprobando en GitHub...';
+    }
+
+    try {
+      const res = await fetch('/api/updates/check?force=true');
+      const data = await res.json();
+      const update = data.update;
+
+      if (!update || update.error) {
+        if (status) {
+          status.className = 'update-check-status err';
+          status.textContent = 'No se pudo conectar con GitHub. Inténtalo más tarde.';
+        }
+        return;
+      }
+
+      if (renderUpdateInfo(update, false)) {
+        if (status) {
+          status.className = 'update-check-status warn';
+          status.textContent = `Hay una versión nueva disponible: v${update.latestVersion}`;
+        }
+        showToast('Actualización disponible', `La versión v${update.latestVersion} ya se puede instalar.`, 'warn');
+        const modalUpdate = document.getElementById('modalUpdate');
+        if (modalUpdate) modalUpdate.classList.add('active');
+      } else {
+        if (status) {
+          status.className = 'update-check-status ok';
+          status.textContent = `Estás en la última versión (v${update.currentVersion}).`;
+        }
+        showToast('Todo al día', `Ya tienes la última versión (v${update.currentVersion}).`, 'success');
+      }
+    } catch (e) {
+      if (status) {
+        status.className = 'update-check-status err';
+        status.textContent = 'Error de conexión: ' + e.message;
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+// ¿El launcher viene de actualizarse? Mostramos el resultado real.
+async function checkLastUpdateResult() {
+  try {
+    const res = await fetch('/api/updates/last-result');
+    const data = await res.json();
+    if (!data.success || !Array.isArray(data.log) || data.log.length === 0) return;
+
+    const ok = data.status === 'success';
+    const box = document.getElementById('lastUpdateResult');
+    const titleText = document.getElementById('lastUpdateTitleText');
+    const logText = document.getElementById('lastUpdateLogText');
+
+    if (box) {
+      box.style.display = 'block';
+      box.classList.toggle('error', !ok);
+    }
+    if (titleText) {
+      titleText.textContent = ok
+        ? `Actualizado correctamente a v${data.updatedTo || launcherVersion}`
+        : 'La última actualización no se pudo aplicar';
+    }
+    if (logText) logText.textContent = data.log.join('\n');
+
+    const terminal = document.getElementById('terminalOutput');
+    if (terminal) {
+      data.log.forEach(line => {
+        const el = document.createElement('div');
+        el.className = 'log-line ' + (ok ? 'info' : 'error');
+        el.textContent = line;
+        terminal.appendChild(el);
+      });
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    if (data.justUpdated) {
+      if (ok) {
+        showToast('Launcher actualizado', `Ahora estás en la versión v${data.updatedTo || launcherVersion}.`, 'success');
+      } else {
+        showToast('La actualización falló', 'Se mantiene la versión anterior. Revisa el registro en Ajustes.', 'error');
+      }
+    }
+  } catch (e) {}
 }
 
 // --- Server-Sent Events (SSE) en Tiempo Real ---
@@ -1521,13 +1711,21 @@ function setupSSE() {
       if (progressBarFill && data.progress !== undefined) progressBarFill.style.width = `${data.progress}%`;
 
       if (data.done) {
-        if (btnStartUpdateText) btnStartUpdateText.textContent = 'Actualizado';
-        setTimeout(() => {
-          window.location.reload();
-        }, 1800);
+        if (data.restarting) {
+          // El launcher se cerrará solo, se instalará la actualización y se
+          // volverá a abrir. No recargamos: no serviría de nada todavía.
+          if (btnStartUpdateText) btnStartUpdateText.textContent = 'Instalando...';
+          showRestartOverlay();
+        } else {
+          if (btnStartUpdateText) btnStartUpdateText.textContent = 'Actualizado';
+          setTimeout(() => {
+            window.location.reload();
+          }, 1800);
+        }
       } else if (data.error) {
         if (btnStartUpdate) btnStartUpdate.disabled = false;
         if (btnStartUpdateText) btnStartUpdateText.textContent = 'Reintentar Actualización';
+        showToast('No se pudo actualizar', data.message || 'Revisa tu conexión e inténtalo otra vez.', 'error');
       }
     } catch (err) {}
   });
@@ -1562,63 +1760,155 @@ function hideSplash() {
 // ========================================================
 // 2. PARTÍCULAS PIXELADAS MINECRAFT EN EL FONDO
 // ========================================================
+function hexToRgba(hex, alpha) {
+  const clean = String(hex || '').trim().replace('#', '');
+  let r, g, b;
+  if (clean.length === 3) {
+    r = parseInt(clean[0] + clean[0], 16);
+    g = parseInt(clean[1] + clean[1], 16);
+    b = parseInt(clean[2] + clean[2], 16);
+  } else if (clean.length === 6) {
+    r = parseInt(clean.slice(0, 2), 16);
+    g = parseInt(clean.slice(2, 4), 16);
+    b = parseInt(clean.slice(4, 6), 16);
+  } else {
+    r = 255; g = 255; b = 255;
+  }
+  if ([r, g, b].some(v => Number.isNaN(v))) return `rgba(255, 255, 255, ${alpha})`;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Sprite pre-renderizado con brillo: dibujarlo es mucho más barato que
+// aplicar shadowBlur en cada frame.
+function makeGlowSprite(color, radius) {
+  const canvas = document.createElement('canvas');
+  canvas.width = radius * 2;
+  canvas.height = radius * 2;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(radius, radius, 0, radius, radius, radius);
+  grad.addColorStop(0, hexToRgba('#ffffff', 0.95));
+  grad.addColorStop(0.35, hexToRgba(color, 0.7));
+  grad.addColorStop(1, hexToRgba(color, 0));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(radius, radius, radius, 0, Math.PI * 2);
+  ctx.fill();
+  return canvas;
+}
+
 function initPixelParticles() {
   const canvas = document.getElementById('pixelCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
+  let width = 0;
+  let height = 0;
+  let mouseX = 0;
+  let mouseY = 0;
+
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
   }
   window.addEventListener('resize', resize);
   resize();
 
-  const PARTICLE_COUNT = 30;
+  // Parallax suave siguiendo el cursor
+  window.addEventListener('mousemove', (e) => {
+    mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+    mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+  });
+
+  let sprites = [];
+  let spriteAccent = null;
+
+  function rebuildSprites() {
+    const style = getComputedStyle(document.documentElement);
+    const accent = style.getPropertyValue('--accent-cyan').trim() || '#00f0ff';
+    const purple = style.getPropertyValue('--accent-purple').trim() || '#a855f7';
+    const blue = style.getPropertyValue('--accent-blue').trim() || '#38bdf8';
+
+    const colors = [accent, accent, accent, '#ffffff', blue, purple];
+    sprites = colors.map(c => makeGlowSprite(c, 24));
+    spriteAccent = accent;
+  }
+  rebuildSprites();
+
+  const PARTICLE_COUNT = window.innerWidth < 1100 ? 12 : 18;
   const particles = [];
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      size: Math.floor(Math.random() * 4) + 2,
-      speedY: -(Math.random() * 0.4 + 0.12),
-      speedX: (Math.random() - 0.5) * 0.2,
-      opacity: Math.random() * 0.45 + 0.15,
-      opacityDelta: (Math.random() * 0.007 + 0.002) * (Math.random() > 0.5 ? 1 : -1)
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * 5 + 2,
+      speedY: -(Math.random() * 0.55 + 0.18),
+      speedX: (Math.random() - 0.5) * 0.24,
+      opacity: Math.random() * 0.4 + 0.18,
+      opacityDelta: (Math.random() * 0.008 + 0.002) * (Math.random() > 0.5 ? 1 : -1),
+      depth: Math.random() * 0.8 + 0.2,
+      spriteIndex: Math.floor(Math.random() * 6),
+      phase: Math.random() * Math.PI * 2,
+      twinkle: Math.random() * 0.02 + 0.008
     });
   }
 
-  function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  let frame = 0;
+  let ultimoFrame = 0;
 
-    const style = getComputedStyle(document.documentElement);
-    const accentColor = style.getPropertyValue('--accent-cyan').trim() || '#00f0ff';
+  function render(tiempo) {
+    requestAnimationFrame(render);
 
-    for (let p of particles) {
+    // No gastamos recursos si el usuario desactivó los efectos o si la
+    // ventana está minimizada.
+    if (!effectsEnabled() || document.hidden) return;
+
+    // Las partículas van lentas: dibujarlas a 60 fps no aporta nada y
+    // consume batería. Con ~30 fps se ven igual de suaves.
+    if (tiempo - ultimoFrame < 33) return;
+    ultimoFrame = tiempo;
+
+    // Si el usuario cambió el color de acento, regeneramos los sprites
+    if (frame % 90 === 0) {
+      const currentAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent-cyan').trim();
+      if (currentAccent && currentAccent !== spriteAccent) rebuildSprites();
+    }
+    frame++;
+
+    ctx.clearRect(0, 0, width, height);
+
+    for (const p of particles) {
       p.y += p.speedY;
-      p.x += p.speedX;
+      p.x += p.speedX + Math.sin((frame * 0.008) + p.phase) * 0.18;
       p.opacity += p.opacityDelta;
 
-      if (p.opacity > 0.6 || p.opacity < 0.1) {
+      if (p.opacity > 0.62 || p.opacity < 0.1) {
         p.opacityDelta = -p.opacityDelta;
+        p.opacity = Math.max(0.1, Math.min(0.62, p.opacity));
       }
-
-      if (p.y < -10) {
-        p.y = canvas.height + 10;
-        p.x = Math.random() * canvas.width;
+      if (p.y < -20) {
+        p.y = height + 20;
+        p.x = Math.random() * width;
       }
-      if (p.x < -10) p.x = canvas.width + 10;
-      if (p.x > canvas.width + 10) p.x = -10;
+      if (p.x < -20) p.x = width + 20;
+      if (p.x > width + 20) p.x = -20;
 
-      ctx.save();
-      ctx.globalAlpha = Math.max(0.05, Math.min(1, p.opacity));
-      ctx.fillStyle = accentColor;
-      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
-      ctx.restore();
+      const parallaxX = mouseX * p.depth * 14;
+      const parallaxY = mouseY * p.depth * 10;
+      const twinkle = 0.75 + Math.sin(frame * p.twinkle + p.phase) * 0.25;
+      const radius = p.size * 2.6;
+
+      ctx.globalAlpha = Math.max(0.04, Math.min(1, p.opacity * twinkle));
+      ctx.drawImage(
+        sprites[p.spriteIndex % sprites.length],
+        p.x + parallaxX - radius,
+        p.y + parallaxY - radius,
+        radius * 2,
+        radius * 2
+      );
     }
 
-    requestAnimationFrame(render);
+    ctx.globalAlpha = 1;
   }
 
   requestAnimationFrame(render);
@@ -1897,5 +2187,145 @@ async function loadProfilesList() {
       container.appendChild(card);
     });
   } catch (e) {}
+}
+
+// ========================================================
+// UTILIDADES DE LA INTERFAZ VIVA
+// ========================================================
+
+function effectsEnabled() {
+  return !document.body.classList.contains('fx-off');
+}
+
+// --- Notificaciones flotantes ---
+const TOAST_ICONS = {
+  info: '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>',
+  success: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>',
+  warn: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+  error: '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'
+};
+
+function showToast(title, text, type) {
+  const stack = document.getElementById('toastStack');
+  if (!stack) return;
+
+  const kind = TOAST_ICONS[type] ? type : 'info';
+  const toast = document.createElement('div');
+  toast.className = `toast ${kind}`;
+  toast.innerHTML = `
+    <svg class="toast-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${TOAST_ICONS[kind]}</svg>
+    <div class="toast-body">
+      <span class="toast-title"></span>
+      <span class="toast-text"></span>
+    </div>
+  `;
+  toast.querySelector('.toast-title').textContent = title;
+  toast.querySelector('.toast-text').textContent = text || '';
+
+  toast.addEventListener('click', () => removeToast(toast));
+  stack.appendChild(toast);
+
+  toast.dataset.timer = String(setTimeout(() => removeToast(toast), 5400));
+}
+
+function removeToast(toast) {
+  if (!toast || toast.classList.contains('leaving')) return;
+  clearTimeout(Number(toast.dataset.timer));
+  toast.classList.add('leaving');
+  setTimeout(() => toast.remove(), 320);
+}
+
+// --- Pantalla de reinicio por actualización ---
+function showRestartOverlay() {
+  if (document.getElementById('restartOverlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'restart-overlay';
+  overlay.id = 'restartOverlay';
+  overlay.innerHTML = `
+    <div class="restart-spinner"></div>
+    <div class="restart-title">Instalando la actualización</div>
+    <p class="restart-text">
+      El launcher se cerrará, reemplazará sus archivos y se volverá a abrir solo
+      con la versión nueva. Tus cuentas, perfiles y mundos se conservan.
+    </p>
+  `;
+  document.body.appendChild(overlay);
+}
+
+// --- Micro-animaciones de números y estadísticas ---
+function pulseStat(el) {
+  if (!el || !effectsEnabled()) return;
+  el.classList.remove('tick');
+  void el.offsetWidth; // fuerza el reinicio de la animación
+  el.classList.add('tick');
+}
+
+function animateCounter(el, targetValue, formatter) {
+  if (!el) return;
+  const target = Math.max(0, Math.round(Number(targetValue) || 0));
+  const format = formatter || ((v) => String(v));
+
+  if (!effectsEnabled() || target <= 1) {
+    el.textContent = format(target);
+    return;
+  }
+
+  const duration = Math.min(1100, 320 + target * 6);
+  const start = performance.now();
+
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = format(Math.round(target * eased));
+    if (t < 1) requestAnimationFrame(step);
+    else {
+      el.textContent = format(target);
+      pulseStat(el);
+    }
+  };
+
+  requestAnimationFrame(step);
+}
+
+// --- Bloques flotantes estilo Minecraft ---
+function initFloatingBlocks() {
+  const container = document.getElementById('floatingBlocks');
+  if (!container) return;
+
+  // Bloques decorativos: verde (césped), piedra, tierra, arena, redstone y diamante
+  const palettes = [
+    ['#7cbd4b', '#5c9c33', '#8f5a3a'], // césped
+    ['#9aa0a6', '#767b80', '#5a5f63'], // piedra
+    ['#8f5a3a', '#6f4429', '#a97250'], // tierra
+    ['#e8d8a0', '#cdb87c', '#f2e8c0'], // arena
+    ['#e04a4a', '#a82b2b', '#f07a7a'], // redstone
+    ['#5ce1e6', '#3aa8ad', '#9ef0f4'], // diamante
+    ['#8b5cf6', '#6d3fd4', '#b18cf8'], // amatista
+    ['#f5c542', '#c99a1f', '#ffe08a']  // oro
+  ];
+
+  const blocks = 6;
+
+  for (let i = 0; i < blocks; i++) {
+    const el = document.createElement('span');
+    el.className = 'fx-block';
+
+    const size = 16 + Math.round(Math.random() * 22); // 16 - 38 px
+    const pal = palettes[i % palettes.length];
+    const left = Math.round(Math.random() * 94);
+
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.left = `${left}%`;
+    el.style.background = `linear-gradient(160deg, ${pal[2]} 0%, ${pal[0]} 42%, ${pal[1]} 100%)`;
+    el.style.setProperty('--drift-x', `${Math.round((Math.random() - 0.5) * 140)}px`);
+    el.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 420)}deg`);
+    el.style.setProperty('--block-opacity', String((0.22 + Math.random() * 0.3).toFixed(2)));
+    el.style.animationDuration = `${34 + Math.round(Math.random() * 40)}s`;
+    el.style.animationDelay = `-${Math.round(Math.random() * 40)}s`;
+
+    container.appendChild(el);
+  }
 }
 

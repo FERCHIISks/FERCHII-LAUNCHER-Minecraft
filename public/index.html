@@ -7,6 +7,13 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="glass-body">
+  <!-- Capa de aurora animada (fondo vivo) -->
+  <div class="aurora-layer" id="auroraLayer" aria-hidden="true">
+    <span class="aurora-blob aurora-blob-1"></span>
+    <span class="aurora-blob aurora-blob-2"></span>
+    <span class="aurora-blob aurora-blob-3"></span>
+  </div>
+
   <!-- Splash Screen con logo animado -->
   <div class="splash-screen" id="splashScreen">
     <div class="splash-content">
@@ -31,6 +38,9 @@
 
   <!-- Fondo personalizado dinámico con opacidad ajustable -->
   <div class="custom-bg-overlay" id="customBgOverlay"></div>
+
+  <!-- Bloques flotantes estilo Minecraft -->
+  <div class="floating-blocks" id="floatingBlocks" aria-hidden="true"></div>
 
   <div class="app-layout" id="appLayout">
     <!-- Barra Lateral de Navegación -->
@@ -98,6 +108,17 @@
             <span class="indicator-title">Motor Local Activo</span>
             <span class="indicator-detail" id="sidebarRamLabel">RAM: 2 GB asignados</span>
           </div>
+        </div>
+
+        <div class="sidebar-meta-row">
+          <span class="sidebar-version" id="sidebarVersion" title="Versión instalada">v0.0.0</span>
+          <span class="sidebar-uptime" id="sidebarUptime" title="Tiempo con el launcher abierto">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4">
+              <circle cx="12" cy="12" r="9"></circle>
+              <polyline points="12 7 12 12 15.5 14"></polyline>
+            </svg>
+            <span id="sidebarUptimeText">00:00:00</span>
+          </span>
         </div>
       </div>
     </aside>
@@ -472,6 +493,58 @@
                   <input type="range" id="bgOpacitySlider" min="0" max="100" step="5" value="45" class="custom-range">
                 </div>
               </div>
+
+              <div class="form-toggle-row">
+                <div class="toggle-info">
+                  <span class="toggle-title">Efectos visuales y animaciones</span>
+                  <span class="toggle-desc">Fondo animado, bloques flotantes, transiciones y micro-efectos. Desactívalo para el consumo mínimo.</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="visualFxToggle" checked>
+                  <span class="slider round"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Tarjeta Versión y Actualizaciones -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div class="card-title-group">
+                  <div class="card-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3>Versión y Actualizaciones</h3>
+                    <p>Comprueba si hay una versión nueva publicada en GitHub e instálala sin perder tus datos.</p>
+                  </div>
+                </div>
+                <div class="ram-badge" id="settingsVersionBadge">v0.0.0</div>
+              </div>
+
+              <div class="update-check-row">
+                <button class="btn-secondary" id="btnCheckUpdates">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                  </svg>
+                  <span>Buscar actualizaciones</span>
+                </button>
+                <span class="update-check-status" id="updateCheckStatus">Aún no se ha comprobado.</span>
+              </div>
+
+              <div class="last-update-result" id="lastUpdateResult" style="display: none;">
+                <div class="last-update-title">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span id="lastUpdateTitleText">Última actualización aplicada</span>
+                </div>
+                <pre class="last-update-log" id="lastUpdateLogText"></pre>
+              </div>
             </div>
 
             <!-- Tarjeta RAM -->
@@ -815,7 +888,7 @@
   </div>
 
   <!-- MODAL 4: ACTUALIZACIÓN DISPONIBLE -->
-  <div class="modal-backdrop" id="modalUpdate">
+  <div class="modal-overlay" id="modalUpdate">
     <div class="modal-card modal-update-card">
       <div class="modal-header">
         <div class="modal-title-group">
@@ -885,6 +958,8 @@
         </button>
       </div>
     </div>
+  </div>
+
   <!-- Modal: Gestor de Perfiles e Instancias -->
   <div class="modal-overlay" id="modalProfiles">
     <div class="modal-card modal-card-wide">
@@ -939,6 +1014,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Notificaciones flotantes -->
+  <div class="toast-stack" id="toastStack"></div>
 
   <script src="js/app.js"></script>
 </body>
