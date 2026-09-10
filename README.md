@@ -37,6 +37,18 @@ Para que no tengas que instalar librerias ni configurar nada raro, aqui tienes e
 
 - Enlace de descarga directa del ZIP: [DESCARGAR FERCHII LAUNCHER v3.6.6](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.6.6/Ferchii_Launcher_v3.6.6-Full.zip)
 
+## Descarga para Debian y Ubuntu
+
+- Paquete Linux `.deb`: [DESCARGAR FERCHII LAUNCHER v3.6.6 PARA LINUX](https://github.com/FERCHIISks/FERCHII-LAUNCHER-Minecraft/releases/download/v3.6.6/ferchii-launcher_3.6.6_amd64.deb)
+
+Instalación rápida desde la carpeta donde descargaste el archivo:
+
+```bash
+sudo apt install ./ferchii-launcher_3.6.6_amd64.deb
+```
+
+Después aparecerá **Ferchii Launcher** en el menú de aplicaciones. Requiere Debian/Ubuntu de 64 bits, Node.js y un navegador compatible; la configuración se guarda en `~/.local/share/ferchii-launcher`.
+
 (Nota: Sube el archivo comprimido a tu servicio de almacenamiento preferido como Google Drive, OneDrive, MediaFire o a los Releases de GitHub y coloca el enlace aqui).
 
 El archivo comprimido incluye:

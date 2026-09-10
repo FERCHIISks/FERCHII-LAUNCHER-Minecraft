@@ -1,0 +1,9 @@
+Package: ferchii-launcher
+Version: 3.6.6
+Section: games
+Priority: optional
+Architecture: amd64
+Maintainer: Ferchii Launcher <ferchii.launcher@example.com>
+Depends: nodejs, curl, xdg-utils
+Description: Ferchii Launcher for Debian and Ubuntu
+ Desktop launcher for Minecraft Java Edition, with the Ferchii EF identity.

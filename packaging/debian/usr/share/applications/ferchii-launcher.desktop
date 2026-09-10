@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ferchii Launcher
+Comment=Launcher de Minecraft Java de Ferchii
+Exec=/usr/bin/ferchii-launcher
+Icon=ferchii-launcher
+Terminal=false
+Categories=Game;Utility;
+StartupWMClass=Ferchii Launcher

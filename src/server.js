@@ -27,7 +27,7 @@ updater.cleanupUpdateTemp();
 const lastUpdateMarker = updater.consumeUpdateMarker();
 
 
-const PORT = 38491;
+const PORT = Number(process.env.FERCHII_PORT || 38491);
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const MIME_TYPES = {

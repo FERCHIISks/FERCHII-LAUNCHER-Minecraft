@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const CONFIG_FILE = path.join(__dirname, '..', 'data', 'config.json');
+const DATA_DIR = process.env.FERCHII_DATA_DIR || path.join(__dirname, '..', 'data');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 function getDefaultGameDir() {
   if (process.platform === 'win32') {

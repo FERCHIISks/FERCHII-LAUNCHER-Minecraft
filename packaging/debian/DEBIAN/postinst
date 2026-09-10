@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+for size in 48 64 128 256; do
+  install -d "/usr/share/icons/hicolor/${size}x${size}/apps"
+  cp "/opt/ferchii-launcher/public/assets/ferchii-logo.png" "/usr/share/icons/hicolor/${size}x${size}/apps/ferchii-launcher.png"
+done
+
+update-icon-caches /usr/share/icons/hicolor 2>/dev/null || true
+update-desktop-database /usr/share/applications 2>/dev/null || true
+exit 0

@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+APP_DIR=/opt/ferchii-launcher
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ferchii-launcher"
+PORT="${FERCHII_PORT:-38491}"
+mkdir -p "$DATA_DIR"
+
+export FERCHII_DATA_DIR="$DATA_DIR"
+export FERCHII_PORT="$PORT"
+
+cd "$APP_DIR"
+node src/server.js >"$DATA_DIR/launcher.log" 2>&1 &
+SERVER_PID=$!
+trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
+
+URL="http://127.0.0.1:${PORT}"
+for _ in $(seq 1 40); do
+  if curl -fsS "$URL/api/config" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.15
+done
+
+if command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$URL" >/dev/null 2>&1 &
+elif command -v sensible-browser >/dev/null 2>&1; then
+  sensible-browser "$URL" >/dev/null 2>&1 &
+else
+  printf '%s\n' "Ferchii Launcher está ejecutándose en $URL"
+fi
+
+wait "$SERVER_PID"
