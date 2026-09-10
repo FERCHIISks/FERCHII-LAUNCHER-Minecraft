@@ -121,7 +121,12 @@ function openFolder(targetPath) {
   if (!fs.existsSync(targetPath)) {
     fs.mkdirSync(targetPath, { recursive: true });
   }
-  exec(`explorer.exe "${targetPath}"`);
+  const command = process.platform === 'win32'
+    ? `explorer.exe "${targetPath}"`
+    : process.platform === 'darwin'
+      ? `open "${targetPath}"`
+      : `xdg-open "${targetPath}"`;
+  exec(command);
 }
 
 module.exports = {

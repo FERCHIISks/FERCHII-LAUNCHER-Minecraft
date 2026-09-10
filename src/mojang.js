@@ -133,7 +133,8 @@ function isLibraryAllowed(lib) {
   for (const rule of lib.rules) {
     let matches = true;
     if (rule.os) {
-      if (rule.os.name && rule.os.name !== 'windows') {
+      const currentOs = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
+      if (rule.os.name && rule.os.name !== currentOs) {
         matches = false;
       }
     }
@@ -147,6 +148,14 @@ function isLibraryAllowed(lib) {
 async function extractNatives(jarPath, nativesDir) {
   if (!fs.existsSync(nativesDir)) {
     fs.mkdirSync(nativesDir, { recursive: true });
+  }
+
+  if (process.platform !== 'win32') {
+    return new Promise((resolve) => {
+      const child = spawn('unzip', ['-qo', jarPath, '-d', nativesDir]);
+      child.on('close', () => resolve());
+      child.on('error', () => resolve());
+    });
   }
 
   return new Promise((resolve) => {
