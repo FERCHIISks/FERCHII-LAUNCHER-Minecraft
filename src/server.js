@@ -559,10 +559,10 @@ const server = http.createServer(async (req, res) => {
             restarting: !!result.restartRequired
           });
 
-          // Damos tiempo a que la interfaz reciba el aviso antes de apagar Node.
+          // Damos un margen corto para que la interfaz reciba el aviso antes de apagar Node.
           // El script de actualización se encarga de cerrar Launcher.exe,
           // reemplazar los archivos y volver a abrirlo.
-          setTimeout(() => process.exit(0), 2000);
+          setTimeout(() => process.exit(0), 650);
         }).catch((err) => {
           updateInProgress = false;
           broadcastSSE('updateProgress', { message: 'Error: ' + err.message, progress: 0, error: true });

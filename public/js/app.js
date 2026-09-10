@@ -1779,7 +1779,7 @@ function setupSSE() {
         if (data.restarting) {
           // El launcher se cerrará solo, se instalará la actualización y se
           // volverá a abrir. No recargamos: no serviría de nada todavía.
-          if (btnStartUpdateText) btnStartUpdateText.textContent = 'Instalando...';
+          if (btnStartUpdateText) btnStartUpdateText.textContent = 'Reiniciando...';
           showRestartOverlay();
         } else {
           if (btnStartUpdateText) btnStartUpdateText.textContent = 'Actualizado';
@@ -2309,10 +2309,10 @@ function showRestartOverlay() {
   overlay.id = 'restartOverlay';
   overlay.innerHTML = `
     <div class="restart-spinner"></div>
-    <div class="restart-title">Instalando la actualización</div>
+    <div class="restart-title">Aplicando actualización…</div>
     <p class="restart-text">
-      El launcher se cerrará, reemplazará sus archivos y se volverá a abrir solo
-      con la versión nueva. Tus cuentas, perfiles y mundos se conservan.
+      Cerrando y reiniciando el launcher. Solo se reemplazan los archivos modificados;
+      tus cuentas, perfiles y mundos se conservan.
     </p>
   `;
   document.body.appendChild(overlay);

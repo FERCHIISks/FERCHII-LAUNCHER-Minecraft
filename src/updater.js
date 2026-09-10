@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec, execFile, spawn } = require('child_process');
 
-const CURRENT_VERSION = '3.6.4';
+const CURRENT_VERSION = '3.6.5';
 const GITHUB_REPO = 'FERCHIISks/FERCHII-LAUNCHER-Minecraft';
 const APP_EXE_NAME = 'Launcher.exe';
 
@@ -316,8 +316,8 @@ function Write-Log([string]$msg) {
 Write-Log '==== Iniciando aplicacion de la actualizacion ===='
 Write-Log ('Destino: ' + $root)
 
-# 1. Esperar a que Node termine de responderle al navegador
-Start-Sleep -Seconds 3
+# 1. Dar un margen mínimo para que Node cierre la petición HTTP
+Start-Sleep -Milliseconds 350
 
 # 2. Cerrar Launcher.exe (solo si el PID indicado es realmente Launcher.exe)
 if ($lpid -gt 0) {
@@ -325,9 +325,9 @@ if ($lpid -gt 0) {
   if ($proc -and $proc.ProcessName -eq 'Launcher') {
     Write-Log ('Cerrando Launcher.exe (PID ' + $lpid + ') para liberar los archivos...')
     Stop-Process -Id $lpid -Force -ErrorAction SilentlyContinue
-    for ($i = 0; $i -lt 20; $i++) {
+    for ($i = 0; $i -lt 12; $i++) {
       if (-not (Get-Process -Id $lpid -ErrorAction SilentlyContinue)) { break }
-      Start-Sleep -Seconds 1
+      Start-Sleep -Milliseconds 250
     }
     Write-Log 'Launcher.exe cerrado.'
   } else {
@@ -346,7 +346,8 @@ if (Test-Path -LiteralPath $cfg) {
 Write-Log 'Copiando archivos actualizados...'
 $robocopy = Join-Path $env:SystemRoot 'System32\\robocopy.exe'
 if (Test-Path -LiteralPath $robocopy) {
-  & $robocopy $src $root /E /XF config.json /XF update.log /R:10 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+  # Copia incremental: solo archivos nuevos o modificados, sin reintentos largos.
+  & $robocopy $src $root /E /COPY:DAT /DCOPY:DAT /XF config.json /XF update.log /R:2 /W:0 /NFL /NDL /NJH /NJS /NP | Out-Null
   $rc = $LASTEXITCODE
   Write-Log ('robocopy finalizado con codigo ' + $rc + '.')
   $copiado = ($rc -lt 8)
