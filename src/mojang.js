@@ -7,7 +7,8 @@ const { detectLoaderType, extractBaseVersion } = require('./modloaders');
 
 
 const MANIFEST_URL = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json';
-const CACHE_MANIFEST_PATH = path.join(__dirname, '..', 'data', 'version_manifest.json');
+const DATA_DIR = process.env.FERCHII_DATA_DIR || path.join(__dirname, '..', 'data');
+const CACHE_MANIFEST_PATH = path.join(DATA_DIR, 'version_manifest.json');
 
 function httpsGetJson(url) {
   return new Promise((resolve, reject) => {
@@ -490,4 +491,3 @@ module.exports = {
   getLocalVersions,
   prepareVersion
 };
-

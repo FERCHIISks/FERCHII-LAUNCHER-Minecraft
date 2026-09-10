@@ -3,7 +3,8 @@ const path = require('path');
 const https = require('https');
 const { execSync, spawn } = require('child_process');
 
-const RUNTIME_DIR = path.join(__dirname, '..', 'data', 'runtime');
+const DATA_DIR = process.env.FERCHII_DATA_DIR || path.join(__dirname, '..', 'data');
+const RUNTIME_DIR = path.join(DATA_DIR, 'runtime');
 
 function getRequiredJavaMajorVersion(mcVersionStr, versionData) {
   // 1. Si el JSON de la versión o versión base especifica la versión de Java directamente, usar esa
@@ -50,9 +51,9 @@ function findLocalJava(majorVersion) {
   const javaFolder = path.join(RUNTIME_DIR, `java-${majorVersion}`);
   if (fs.existsSync(javaFolder)) {
     // 1. Buscar en javaFolder/bin/
-    const directPath = path.join(javaFolder, 'bin', 'javaw.exe');
+    const directPath = path.join(javaFolder, 'bin', process.platform === 'win32' ? 'javaw.exe' : 'java');
     if (fs.existsSync(directPath)) return directPath;
-    const directExe = path.join(javaFolder, 'bin', 'java.exe');
+    const directExe = path.join(javaFolder, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
     if (fs.existsSync(directExe)) return directExe;
 
     // 2. Buscar en subdirectorios (ej. jdk-21.0.12.1+1-jre/bin/)
@@ -60,9 +61,9 @@ function findLocalJava(majorVersion) {
       const items = fs.readdirSync(javaFolder, { withFileTypes: true });
       for (const item of items) {
         if (item.isDirectory()) {
-          const sub = path.join(javaFolder, item.name, 'bin', 'javaw.exe');
+          const sub = path.join(javaFolder, item.name, 'bin', process.platform === 'win32' ? 'javaw.exe' : 'java');
           if (fs.existsSync(sub)) return sub;
-          const subExe = path.join(javaFolder, item.name, 'bin', 'java.exe');
+          const subExe = path.join(javaFolder, item.name, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
           if (fs.existsSync(subExe)) return subExe;
         }
       }
@@ -88,7 +89,7 @@ function checkBinaryJavaVersion(binPath) {
 function findSystemJava(requiredMajor) {
   // 1. Comprobar variable de entorno JAVA_HOME
   if (process.env.JAVA_HOME) {
-    const javaHomeW = path.join(process.env.JAVA_HOME, 'bin', 'javaw.exe');
+    const javaHomeW = path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'javaw.exe' : 'java');
     if (fs.existsSync(javaHomeW) && checkBinaryJavaVersion(javaHomeW) === requiredMajor) {
       return javaHomeW;
     }
@@ -96,13 +97,16 @@ function findSystemJava(requiredMajor) {
 
   // 2. Comprobar en PATH
   try {
-    const paths = execSync('where.exe javaw.exe 2>nul', { encoding: 'utf8' }).split('\r\n').filter(Boolean);
+    const lookup = process.platform === 'win32' ? 'where.exe javaw.exe 2>nul' : 'command -v java 2>/dev/null';
+    const paths = execSync(lookup, { encoding: 'utf8' }).split(/\r?\n/).filter(Boolean);
     for (const p of paths) {
       if (fs.existsSync(p) && checkBinaryJavaVersion(p) === requiredMajor) {
         return p;
       }
     }
   } catch (e) {}
+
+  if (process.platform !== 'win32') return null;
 
   // 3. Comprobar rutas comunes de instalación en Windows
   const searchDirs = [
@@ -181,6 +185,14 @@ async function extractZip(zipPath, targetDir) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
+  if (process.platform !== 'win32') {
+    return new Promise((resolve, reject) => {
+      const child = spawn('tar', ['-xzf', zipPath, '-C', targetDir]);
+      child.on('close', (code) => code === 0 ? resolve() : reject(new Error(`tar falló con código ${code}`)));
+      child.on('error', reject);
+    });
+  }
+
   return new Promise((resolve, reject) => {
     const psCmd = `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${targetDir}" -Force`;
     const child = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCmd], {
@@ -216,8 +228,10 @@ async function ensureJavaRuntime(majorVersion, onProgressMessage) {
   }
 
   // 3. Si NO existe, descargarlo automáticamente
-  const url = `https://api.adoptium.net/v3/binary/latest/${majorVersion}/ga/windows/x64/jre/hotspot/normal/eclipse`;
-  const zipPath = path.join(RUNTIME_DIR, `java-${majorVersion}.zip`);
+  const platformName = process.platform === 'win32' ? 'windows' : 'linux';
+  const archiveExtension = process.platform === 'win32' ? 'zip' : 'tar.gz';
+  const url = `https://api.adoptium.net/v3/binary/latest/${majorVersion}/ga/${platformName}/x64/jre/hotspot/normal/eclipse`;
+  const zipPath = path.join(RUNTIME_DIR, `java-${majorVersion}.${archiveExtension}`);
   const targetDir = path.join(RUNTIME_DIR, `java-${majorVersion}`);
 
   if (onProgressMessage) onProgressMessage(`Descargando Java ${majorVersion} portable (optimizado)...`, 5);
@@ -240,7 +254,7 @@ async function ensureJavaRuntime(majorVersion, onProgressMessage) {
 
   const finalJava = findLocalJava(majorVersion);
   if (!finalJava) {
-    throw new Error(`Java ${majorVersion} se extrajo pero no se encontró javaw.exe en ${targetDir}`);
+    throw new Error(`Java ${majorVersion} se extrajo pero no se encontró el ejecutable Java en ${targetDir}`);
   }
 
   if (onProgressMessage) onProgressMessage(`Java ${majorVersion} preparado correctamente.`, 100);
