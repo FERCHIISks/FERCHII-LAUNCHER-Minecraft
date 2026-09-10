@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec, execFile, spawn } = require('child_process');
 
-const CURRENT_VERSION = '3.6.0';
+const CURRENT_VERSION = '3.6.1';
 const GITHUB_REPO = 'FERCHIISks/FERCHII-LAUNCHER-Minecraft';
 const APP_EXE_NAME = 'Launcher.exe';
 

@@ -146,6 +146,18 @@ async function loadInitialConfig() {
     const res = await fetch('/api/config');
     const data = await res.json();
     if (data.success) {
+      // El actualizador de versiones antiguas puede reemplazar public/src,
+      // pero el proceso Node que ya estaba abierto sigue siendo el anterior.
+      // Cerramos el wrapper para que al abrirlo de nuevo arranque el server
+      // actualizado y no vuelva a mostrar la misma actualización.
+      if (!data.launcherVersion) {
+        setTimeout(() => {
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage('close');
+          }
+        }, 1800);
+        showToast('Actualización casi lista', 'El launcher se cerrará. Ábrelo otra vez para terminar la actualización.');
+      }
       launcherConfig = data.config;
       if (data.launcherVersion) {
         launcherVersion = data.launcherVersion;
@@ -2328,4 +2340,3 @@ function initFloatingBlocks() {
     container.appendChild(el);
   }
 }
-
